@@ -1,0 +1,31 @@
+# Gradle
+.gradle
+build/
+!gradle/wrapper/gradle-wrapper.jar
+!**/src/main/**/build/
+
+# Java class files
+*.class
+
+# Log file
+*.log
+
+# Eclipse
+.classpath
+.project
+.settings/
+bin/
+
+# IntelliJ IDEA
+.idea
+*.iws
+*.iml
+*.ipr
+out/
+
+# Mac
+.DS_Store
+
+# Secrets (나중에 비밀번호 숨길 때 사용)
+# application.yml
+# application-secret.yml

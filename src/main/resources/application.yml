@@ -1,0 +1,21 @@
+spring:
+  application:
+    name: backend
+
+  datasource:
+    # 'db'는 docker-compose에서 정한 서비스 이름 (localhost 아님!)
+    url: jdbc:mysql://db:3306/rallytrack?useSSL=false&allowPublicKeyRetrieval=true&characterEncoding=UTF-8&serverTimezone=UTC
+    username: user
+    password: password
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  jpa:
+    database-platform: org.hibernate.dialect.MySQLDialect
+    hibernate:
+      # 서버 켤 때마다 엔티티(Java 객체)에 맞춰 DB 테이블 자동 생성/업데이트
+      ddl-auto: update
+    properties:
+      hibernate:
+        format_sql: true
+    # 실행되는 SQL 쿼리를 로그에 보여줌 (디버깅용)
+    show-sql: true
