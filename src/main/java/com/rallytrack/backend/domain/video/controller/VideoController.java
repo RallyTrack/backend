@@ -21,7 +21,7 @@ public class VideoController {
 
     private final VideoService videoService;
 
-    @Operation(summary = "영상 업로드", description = "영상을 업로드합니다. (테스트용: X-User-Id 헤더로 사용자 지정)")
+    @Operation(summary = "영상 업로드", description = "영상을 업로드합니다.")
     @PostMapping
     public ResponseEntity<ApiResponse<VideoUploadResponse>> uploadVideo(
             HttpServletRequest httpRequest,
