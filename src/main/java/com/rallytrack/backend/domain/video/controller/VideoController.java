@@ -7,6 +7,7 @@ import com.rallytrack.backend.domain.video.service.VideoService;
 import com.rallytrack.backend.global.response.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -23,8 +24,10 @@ public class VideoController {
     @Operation(summary = "영상 업로드", description = "영상을 업로드합니다. (테스트용: X-User-Id 헤더로 사용자 지정)")
     @PostMapping
     public ResponseEntity<ApiResponse<VideoUploadResponse>> uploadVideo(
-            @RequestHeader(value = "X-User-Id", defaultValue = "1") Long userId,
+            HttpServletRequest httpRequest,
             @RequestBody VideoUploadRequest request) {
+
+        Long userId = (Long) httpRequest.getAttribute("userId");
 
         if (request.getTitle() == null || request.getTitle().isBlank()) {
             return ResponseEntity.badRequest()
