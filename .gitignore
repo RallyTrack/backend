@@ -27,6 +27,11 @@ out/
 # Mac
 .DS_Store
 
+# Visual Studio Code
+.vscode/
+.history/
+*.code-workspace
+
 # Secrets (나중에 비밀번호 숨길 때 사용)
 # application.yml
 # application-secret.yml
