@@ -34,6 +34,13 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
         String path = request.getRequestURI();
 
+
+        // CORS Preflight 요청은 인증 없이 통과
+        if ("OPTIONS".equalsIgnoreCase(request.getMethod())) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+
         // 화이트리스트 경로는 통과
         if (WHITELIST.stream().anyMatch(path::startsWith)) {
             filterChain.doFilter(request, response);
