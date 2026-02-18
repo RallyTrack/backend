@@ -3,6 +3,7 @@ package com.rallytrack.backend.domain.analysis.service;
 import com.rallytrack.backend.domain.analysis.dto.AnalysisReportResponse;
 import com.rallytrack.backend.domain.analysis.entity.AnalysisResult;
 import com.rallytrack.backend.domain.analysis.repository.AnalysisResultRepository;
+import com.rallytrack.backend.global.exception.ResourceNotFroundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,7 +17,7 @@ public class AnalysisService {
     @Transactional(readOnly = true)
     public AnalysisReportResponse getReport(Long videoId) {
         AnalysisResult result = analysisResultRepository.findByVideoVideoId(videoId)
-                .orElseThrow(() -> new IllegalArgumentException("분석 결과를 찾을 수 없습니다."));
+                .orElseThrow(() -> new ResourceNotFroundException("해당 영상의 분석 결과가 없습니다."));
 
         return AnalysisReportResponse.builder()
                 .videoId(videoId)
