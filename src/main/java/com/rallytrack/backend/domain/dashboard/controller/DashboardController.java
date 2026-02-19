@@ -17,7 +17,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/v1")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "http://localhost:5173")
+// @CrossOrigin(origins = "http://localhost:5173") // WebConfig에서 전역으로 설정해놓음. 충돌 가능성 있기에 삭제
 public class DashboardController {
 
     private final DashboardService dashboardService;
