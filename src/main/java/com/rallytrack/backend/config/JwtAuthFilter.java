@@ -1,26 +1,21 @@
 package com.rallytrack.backend.config;
 
-import com.rallytrack.backend.domain.user.entity.User;
-import com.rallytrack.backend.domain.user.repository.UserRepository;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
-import lombok.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 import java.util.List;
-import java.util.Optional;
 
 @Component
 @RequiredArgsConstructor
 public class JwtAuthFilter extends OncePerRequestFilter {
 
     private final JwtUtil jwtUtil;
-    private final UserRepository userRepository;
 
     // 인증이 필요 없는 경로
     private static final List<String> WHITELIST = List.of(
@@ -66,20 +61,11 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             }
         }
 
-        // MasterUser 헤더가 있으면 허용 (Swagger 테스트용)
-        String userIdHeader = request.getHeader("MasterUser");
+        // X-User-Id 헤더가 있으면 허용 (Swagger 테스트용)
+        String userIdHeader = request.getHeader("X-User-Id");
         if (userIdHeader != null) {
-            try {
-                Long userId = Long.parseLong(userIdHeader);
-                Optional<User> userOptional = userRepository.findById(userId);
-                if (userOptional.isPresent()) {
-                    request.setAttribute("userId", userId);
-                    filterChain.doFilter(request, response);
-                    return;
-                }
-            } catch (NumberFormatException e) {
-                System.out.println("잘못된 헤더 포맷 : " + userIdHeader);
-            }
+            filterChain.doFilter(request, response);
+            return;
         }
 
         // 인증 실패
