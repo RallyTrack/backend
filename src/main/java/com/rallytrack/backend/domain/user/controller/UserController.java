@@ -2,12 +2,15 @@ package com.rallytrack.backend.domain.user.controller;
 
 import com.rallytrack.backend.domain.user.dto.LoginRequest;
 import com.rallytrack.backend.domain.user.dto.LoginResponse;
+import com.rallytrack.backend.domain.user.dto.SignupRequest;
 import com.rallytrack.backend.domain.user.service.UserService;
 import com.rallytrack.backend.global.response.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.Value;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -27,5 +30,14 @@ public class UserController {
     public ResponseEntity<ApiResponse<LoginResponse>> login(@Valid @RequestBody LoginRequest request) {
         LoginResponse response = userService.login(request);
         return ResponseEntity.ok(ApiResponse.success("로그인 성공", response));
+    }
+
+    @Operation(summary = "회원가입", description = "메일과 비밀번호 , 이름을 입력하여 회원가입, 회원가입 이후 바로 로그인되어있음")
+    @PostMapping("/signup")
+    public ResponseEntity<ApiResponse<LoginResponse>> signup(@Valid
+                                                             @RequestBody SignupRequest request) {
+        LoginResponse response = userService.signup(request);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.created("회원가입 성공", response));
     }
 }
