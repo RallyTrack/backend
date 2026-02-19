@@ -7,20 +7,20 @@ import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
+import java.io.IOException;
 import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
 public class S3Service {
 
-    private final S3Client S3Client;
     private final S3Client s3Client;
 
     private String bucket;
 
     private String region;
 
-    public String upLoadFile(MultipartFile file) throws Exception {
+    public String upLoadFile(MultipartFile file) throws IOException {
         String fileName = "videos/" + UUID.randomUUID() + "_" + file.getOriginalFilename();
 
         // 파일을 버킷에 넣는 요청
