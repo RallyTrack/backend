@@ -5,6 +5,7 @@ import com.rallytrack.backend.domain.video.dto.VideoUploadResponse;
 import com.rallytrack.backend.domain.video.service.VideoService;
 import com.rallytrack.backend.global.response.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
@@ -26,7 +27,7 @@ public class VideoController {
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)    // 이 API는 JSON이 아닌 form-data형식을 받는다 선언
     public ResponseEntity<ApiResponse<VideoUploadResponse>> uploadVideo(
             HttpServletRequest httpRequest,
-            @RequestParam("videoFile") MultipartFile videoFile,
+            @RequestParam("videoFile") @Schema(description = "영상 파일 (최대 500MB)")MultipartFile videoFile,
             @RequestParam("title") String title,
             @RequestParam(value = "matchDate") String matchDate) {
 

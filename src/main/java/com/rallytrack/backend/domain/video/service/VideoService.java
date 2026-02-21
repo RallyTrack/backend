@@ -20,7 +20,6 @@ import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.stream.Collectors;
 
 @Service
@@ -43,6 +42,10 @@ public class VideoService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
 
+        // 입력값 검증
+        LocalDate parsedDate = LocalDate.parse(matchDate);
+
+        // S3 업로드
         String s3Url;
 
         try {
@@ -51,16 +54,18 @@ public class VideoService {
             throw new RuntimeException("영상 파일 업로드에 실패했습니다.");
         }
 
+        // DB 저장
         Video video = Video.builder()
                 .title(title)
                 .s3Url(s3Url)
-                .matchDate(LocalDate.parse(matchDate))
+                .matchDate(parsedDate)
                 .videoStatus("PROCESSING")
                 .user(user)
                 .build();
 
         Video saved = videoRepository.save(video);
 
+        // 분석 서버 호출
         try {
             Map<String, Object> analyzeRequest = Map.of(
                     "videoId", saved.getVideoId(),

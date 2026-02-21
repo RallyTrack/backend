@@ -1,6 +1,7 @@
 package com.rallytrack.backend.domain.video.entity;
 
 import com.rallytrack.backend.domain.user.entity.User;
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -41,7 +42,8 @@ public class Video {
     @Column(name = "match_score")
     private String matchScore;
 
-    @Column(name = "match_date")
+    @Column(name = "match_date")    // 2026-02-22 형식으로 입력
+    @Schema(description = "경기 날짜 (YYYY-MM-DD 형식)", example = "2026-02-22")
     private LocalDate matchDate;
 
     @CreationTimestamp
