@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.*;
 @RequiredArgsConstructor
 public class AnalysisController {
 
+
     private final AnalysisService analysisService;
 
     @Operation(summary = "리포트 조회", description = "영상 분석 리포트를 조회합니다.")
@@ -31,4 +32,5 @@ public class AnalysisController {
         analysisService.saveResult(request);
         return ResponseEntity.ok(ApiResponse.success("분석 결과 저장 완료", null));
     }
+
 }
