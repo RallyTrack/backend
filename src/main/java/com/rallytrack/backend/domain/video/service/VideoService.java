@@ -113,7 +113,7 @@ public class VideoService {
                 .videoInfo(VideoDetailResponse.VideoInfo.builder()
                         .videoId(video.getVideoId())
                         .title(video.getTitle())
-                        .videoUrl(video.getS3Url())
+                        .videoUrl(s3Service.generatePresignedUrl(video.getS3Url()))
                         .thumbnailUrl(video.getThumbnailUrl())
                         .duration(video.getDuration())
                         .build())
