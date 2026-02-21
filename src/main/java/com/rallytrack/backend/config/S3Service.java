@@ -1,6 +1,7 @@
 package com.rallytrack.backend.config;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 import software.amazon.awssdk.core.sync.RequestBody;
@@ -16,8 +17,11 @@ public class S3Service {
 
     private final S3Client s3Client;
 
+    // application.yml에서 설정값을 읽어와서 필드에 주입.
+    @Value("${cloud.aws.s3.bucket}")
     private String bucket;
 
+    @Value("${cloud.aws.region}")
     private String region;
 
     public String upLoadFile(MultipartFile file) throws IOException {
@@ -34,6 +38,6 @@ public class S3Service {
         s3Client.putObject(request, RequestBody.fromBytes(file.getBytes()));
 
         // 업로드된 파일의 S3 url. 이 url이 DB의 videos.s3_url에 저장됨
-        return String.format("https://%s.s3.%s.amazonaws.com/%s\", bucket, region, fileName");
+        return String.format("https://%s.s3.%s.amazonaws.com/%s", bucket, region, fileName);
     }
 }
