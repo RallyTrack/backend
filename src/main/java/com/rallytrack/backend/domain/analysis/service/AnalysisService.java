@@ -9,6 +9,7 @@ import com.rallytrack.backend.domain.video.entity.Video;
 import com.rallytrack.backend.domain.video.repository.TimelineEventRepository;
 import com.rallytrack.backend.domain.video.repository.VideoRepository;
 
+import com.rallytrack.backend.global.exception.ResourceNotFroundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
