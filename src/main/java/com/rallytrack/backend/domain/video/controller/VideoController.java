@@ -42,7 +42,7 @@ public class VideoController {
     @Operation(summary = "영상 상세 정보 조회", description = "영상 플레이어 정보 및 타임라인 이벤트를 조회합니다.")
     @GetMapping("/{videoId}")
     public ResponseEntity<ApiResponse<VideoDetailResponse>> getVideoDetail(
-            @PathVariable Long videoId) {
+            @PathVariable("videoId") Long videoId) {
 
         VideoDetailResponse response = videoService.getVideoDetail(videoId);
         return ResponseEntity.ok(ApiResponse.success("성공", response));
