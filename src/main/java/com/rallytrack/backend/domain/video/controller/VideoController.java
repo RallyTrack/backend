@@ -46,5 +46,6 @@ public class VideoController {
 
         VideoDetailResponse response = videoService.getVideoDetail(videoId);
         return ResponseEntity.ok(ApiResponse.success("성공", response));
-    }
+    };
+    
 }
