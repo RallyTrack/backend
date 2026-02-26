@@ -28,6 +28,7 @@ public class AnalysisController {
         return ResponseEntity.ok(ApiResponse.success("분석 리포트 조회 성공", response));
     }
 
+    @PostMapping("/complete")
     public ResponseEntity<ApiResponse<Void>> analysisComplete(@RequestBody AnalysisCompleteRequest request) {
         analysisService.saveResult(request);
         return ResponseEntity.ok(ApiResponse.success("분석 결과 저장 완료", null));
