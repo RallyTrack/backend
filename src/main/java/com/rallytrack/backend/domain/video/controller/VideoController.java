@@ -24,10 +24,10 @@ public class VideoController {
     private final VideoService videoService;
 
     @Operation(summary = "영상 업로드", description = "영상을 업로드합니다.")
-    @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)    // 이 API는 JSON이 아닌 form-data형식을 받는다 선언
+    @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ApiResponse<VideoUploadResponse>> uploadVideo(
             HttpServletRequest httpRequest,
-            @RequestParam("videoFile") @Schema(description = "영상 파일 (최대 500MB)")MultipartFile videoFile,
+            @RequestParam("videoFile") @Schema(description = "영상 파일 (최대 500MB)") MultipartFile videoFile,
             @RequestParam("title") String title,
             @RequestParam(value = "matchDate") String matchDate) {
 
@@ -55,5 +55,16 @@ public class VideoController {
 
         VideoDetailResponse response = videoService.getVideoDetail(videoId);
         return ResponseEntity.ok(ApiResponse.success("성공", response));
+    }
+
+    @Operation(summary = "영상 삭제", description = "영상을 소프트 삭제합니다. 연관된 분석 결과와 타임라인 이벤트도 함께 삭제됩니다.")
+    @DeleteMapping("/{videoId}")
+    public ResponseEntity<ApiResponse<Void>> deleteVideo(
+            HttpServletRequest httpRequest,
+            @PathVariable("videoId") Long videoId) {
+
+        Long userId = (Long) httpRequest.getAttribute("userId");
+        videoService.deleteVideo(userId, videoId);
+        return ResponseEntity.ok(ApiResponse.success("영상이 삭제되었습니다.", null));
     }
 }

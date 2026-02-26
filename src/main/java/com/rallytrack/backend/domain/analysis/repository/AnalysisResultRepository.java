@@ -7,4 +7,5 @@ import java.util.Optional;
 
 public interface AnalysisResultRepository extends JpaRepository<AnalysisResult, Long> {
     Optional<AnalysisResult> findByVideoVideoId(Long videoId);
+    void deleteByVideoVideoId(Long videoId);
 }
