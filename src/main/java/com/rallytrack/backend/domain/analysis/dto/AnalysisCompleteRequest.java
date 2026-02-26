@@ -29,7 +29,7 @@ public class AnalysisCompleteRequest {  // 분석서버가 보내는 json의 모
         private String eventType;
         private String eventTitle;
         private String eventDescription;
-        private Integer eventScore;
+        private String eventScore;
 
     }
 
