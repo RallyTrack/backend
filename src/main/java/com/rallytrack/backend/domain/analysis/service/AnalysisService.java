@@ -79,7 +79,7 @@ public class AnalysisService {
                         .eventType(eventReq.getEventType())
                         .eventTitle(eventReq.getEventTitle())
                         .eventDescription(eventReq.getEventDescription())
-                        .eventScore(String.valueOf(eventReq.getEventScore()))
+                        .eventScore(eventReq.getEventScore())
                         .build();
 
                 timelineEventRepository.save(event);
