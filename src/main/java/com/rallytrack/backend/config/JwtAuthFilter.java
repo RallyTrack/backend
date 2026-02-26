@@ -34,7 +34,8 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             throws ServletException, IOException {
 
         String path = request.getRequestURI();
-
+        // 디버그용, 추후 지울 예정
+        System.out.println("[JWT 디버그] path=" + path + ", method=" + request.getMethod());
 
         // CORS Preflight 요청은 인증 없이 통과
         if ("OPTIONS".equalsIgnoreCase(request.getMethod())) {
@@ -50,9 +51,13 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
         // Authorization 헤더에서 JWT 토큰 추출
         String authHeader = request.getHeader("Authorization");
+        // 디버그용, 추후 지울 예정
+        System.out.println("[JWT 디버그] authHeader=" + authHeader);
 
         if (authHeader != null && authHeader.startsWith("Bearer ")) {
             String token = authHeader.substring(7);
+            // 디버그용, 추후 지울 예정
+            System.out.println("[JWT 디버그] isValid=" + jwtUtil.isValid(token));
             if (jwtUtil.isValid(token)) {
                 Long userId = jwtUtil.getUserId(token);
                 // X-User-Id 헤더 대신 JWT에서 추출한 userId를 attribute로 저장
@@ -65,6 +70,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         // X-User-Id 헤더가 있으면 허용 (Swagger 테스트용)
         String userIdHeader = request.getHeader("X-User-Id");
         if (userIdHeader != null) {
+            request.setAttribute("userId", Long.parseLong(userIdHeader));
             filterChain.doFilter(request, response);
             return;
         }
