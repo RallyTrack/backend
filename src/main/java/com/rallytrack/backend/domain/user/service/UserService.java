@@ -53,7 +53,7 @@ public class UserService {
         RefreshToken refreshToken = RefreshToken.builder()
                 .token(refreshTokenStr)
                 .user(user)
-                .expiresAt(LocalDateTime.now().plusMillis(refreshTokenExpiration))
+                .expiresAt(LocalDateTime.now().plusSeconds(refreshTokenExpiration))
                 .build();
         refreshTokenRepository.save(refreshToken);
 
@@ -95,7 +95,7 @@ public class UserService {
         RefreshToken refreshToken = RefreshToken.builder()
                 .token(refreshTokenStr)
                 .user(saved)
-                .expiresAt(LocalDateTime.now().plusMillis(refreshTokenExpiration))
+                .expiresAt(LocalDateTime.now().plusSeconds(refreshTokenExpiration))
                 .build();
         refreshTokenRepository.save(refreshToken);
 
@@ -142,7 +142,7 @@ public class UserService {
         RefreshToken newRefreshToken = RefreshToken.builder()
                 .token(newRefreshTokenStr)
                 .user(user)
-                .expiresAt(LocalDateTime.now().plusMillis(refreshTokenExpiration))
+                .expiresAt(LocalDateTime.now().plusSeconds(refreshTokenExpiration))
                 .build();
         refreshTokenRepository.save(newRefreshToken);
 
