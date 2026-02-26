@@ -1,6 +1,7 @@
 package com.rallytrack.backend.domain.video.service;
 
 import com.rallytrack.backend.config.S3Service;
+import com.rallytrack.backend.domain.analysis.repository.AnalysisResultRepository;
 import com.rallytrack.backend.domain.user.entity.User;
 import com.rallytrack.backend.domain.user.repository.UserRepository;
 import com.rallytrack.backend.domain.video.dto.VideoDetailResponse;
@@ -17,6 +18,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
@@ -28,6 +30,7 @@ public class VideoService {
 
     private final VideoRepository videoRepository;
     private final TimelineEventRepository timelineEventRepository;
+    private final AnalysisResultRepository analysisResultRepository;
     private final UserRepository userRepository;
 
     private final S3Service s3Service;
@@ -72,13 +75,12 @@ public class VideoService {
                     "s3Url", s3Url
             );
             restTemplate.postForEntity(
-                    "http://localhost:8000/analyze",    // 분석서버에 POST요청 보냄, 추후 .yml에 변수로 관리할 수 있도록 변경
+                    "http://localhost:8000/analyze",
                     analyzeRequest,
                     String.class
             );
-        } catch (Exception e){
+        } catch (Exception e) {
             // 분석서버 호출이 실패해도 업로드 자체는 성공
-            // 재시도 로직 추후 추가 예정
         }
 
         return VideoUploadResponse.builder()
@@ -122,5 +124,34 @@ public class VideoService {
                         .build())
                 .timelineEvents(eventDtos)
                 .build();
+    }
+
+    @Transactional
+    public void deleteVideo(Long userId, Long videoId) {
+        Video video = videoRepository.findById(videoId)
+                .orElseThrow(() -> new IllegalArgumentException("영상을 찾을 수 없습니다."));
+
+        // 소유권 검증
+        if (!video.getUser().getId().equals(userId)) {
+            throw new IllegalArgumentException("해당 영상에 대한 삭제 권한이 없습니다.");
+        }
+
+        // 1. 타임라인 이벤트 삭제
+        timelineEventRepository.deleteByVideoVideoId(videoId);
+
+        // 2. 분석 결과 삭제
+        analysisResultRepository.deleteByVideoVideoId(videoId);
+
+        // 3. S3 파일 삭제
+        try {
+            s3Service.deleteFile(video.getS3Url());
+        } catch (Exception e) {
+            // S3 삭제 실패해도 DB 삭제는 진행
+        }
+
+        // 4. 영상 삭제 (소프트 삭제)
+        video.setDeletedAt(LocalDateTime.now());
+        video.setVideoStatus("DELETED");
+        videoRepository.save(video);
     }
 }
