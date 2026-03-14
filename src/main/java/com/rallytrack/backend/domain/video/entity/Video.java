@@ -29,6 +29,9 @@ public class Video {
     @Column(name = "s3_url")
     private String s3Url;
 
+    @Column(name = "skeleton_video_url")
+    private String skeletonVideoUrl;
+
     @Column(name = "thumbnail_url")
     private String thumbnailUrl;
 
