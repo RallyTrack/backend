@@ -22,6 +22,7 @@ public class VideoDetailResponse {
         private Long videoId;
         private String title;
         private String videoUrl;
+        private String skeletonVideoUrl;
         private String thumbnailUrl;
         private Integer duration;
     }

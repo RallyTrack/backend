@@ -89,6 +89,7 @@ public class AnalysisService {
         // 영상 정보 업데이트
         video.setMatchScore(request.getMyScore() + ":" + request.getOpponentScore());
         video.setVideoStatus("COMPLETED");
+        video.setSkeletonVideoUrl(request.getSkeletonVideoUrl());
 
         // matchTime("8:26") → duration(초) 변환
         if (request.getMatchTime() != null && request.getMatchTime().contains(":")) {
