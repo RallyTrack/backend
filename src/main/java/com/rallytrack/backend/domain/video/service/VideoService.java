@@ -68,11 +68,12 @@ public class VideoService {
 
         Video saved = videoRepository.save(video);
 
-        // 분석 서버 호출
+        // 분석 서버 호출 (presigned URL로 전달)
         try {
+            String presignedUrl = s3Service.generatePresignedUrl(s3Url);
             Map<String, Object> analyzeRequest = Map.of(
                     "videoId", saved.getVideoId(),
-                    "s3Url", s3Url
+                    "s3Url", presignedUrl
             );
             restTemplate.postForEntity(
                     "http://localhost:8000/analyze",
