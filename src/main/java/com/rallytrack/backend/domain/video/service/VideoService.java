@@ -22,6 +22,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
@@ -71,9 +72,14 @@ public class VideoService {
         // 분석 서버 호출 (presigned URL로 전달)
         try {
             String presignedUrl = s3Service.generatePresignedUrl(s3Url);
+            String skeletonKey = "skeletons/" + UUID.randomUUID() + "_skeleton.mp4";
+            String skeletonUploadUrl = s3Service.generatePresignedUploadUrl(skeletonKey);
+            String skeletonVideoUrl = String.format("https://%s.s3.%s.amazonaws.com/%s", "rallytrack-videos", "us-east-1", skeletonKey);
             Map<String, Object> analyzeRequest = Map.of(
                     "videoId", saved.getVideoId(),
-                    "s3Url", presignedUrl
+                    "s3Url", presignedUrl,
+                    "skeletonUploadUrl", skeletonUploadUrl,
+                    "skeletonVideoUrl", skeletonVideoUrl   // AI 서버가 webhook에 그대로 돌려줄 값.
             );
             restTemplate.postForEntity(
                     "http://localhost:8000/analyze",
@@ -112,11 +118,16 @@ public class VideoService {
                         .build())
                 .collect(Collectors.toList());
 
+        String skeletonUrl = video.getSkeletonVideoUrl() != null
+                ? s3Service.generatePresignedUrl(video.getSkeletonVideoUrl())
+                : null;
+
         return VideoDetailResponse.builder()
                 .videoInfo(VideoDetailResponse.VideoInfo.builder()
                         .videoId(video.getVideoId())
                         .title(video.getTitle())
                         .videoUrl(s3Service.generatePresignedUrl(video.getS3Url()))
+                        .skeletonVideoUrl(skeletonUrl)
                         .thumbnailUrl(video.getThumbnailUrl())
                         .duration(video.getDuration())
                         .build())
