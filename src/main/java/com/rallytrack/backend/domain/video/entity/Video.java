@@ -36,7 +36,7 @@ public class Video {
     private String thumbnailUrl;
 
     @Column
-    private Integer duration;
+    private String duration;
 
     @Column(name = "video_status")
     @Builder.Default

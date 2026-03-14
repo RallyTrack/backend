@@ -23,13 +23,16 @@ public class DashboardService {
 
     @Transactional(readOnly = true)
     public DashboardResponse getDashboard(Long userId) {
-        List<Video> videos = videoRepository.findByUserIdOrderByUploadDateDesc(userId);
+        List<Video> videos = videoRepository.findByUserIdAndVideoStatusNotOrderByUploadDateDesc(userId, "DELETED");
 
         // 총 분석 시간 계산
         int totalSeconds = videos.stream()
                 .map(Video::getDuration)
-                .filter(d -> d != null)
-                .mapToInt(Integer::intValue)
+                .filter(d -> d != null && d.contains(":"))
+                .mapToInt(d -> {
+                    String[] parts = d.split(":");
+                    return Integer.parseInt(parts[0]) * 60 + Integer.parseInt(parts[1]);
+                })
                 .sum();
         String totalTime = String.format("%d시간 %d분",
                 totalSeconds / 3600, (totalSeconds % 3600) / 60);
@@ -53,9 +56,7 @@ public class DashboardService {
         List<DashboardResponse.RecentVideo> recentVideos = videos.stream()
                 .limit(10)
                 .map(v -> {
-                    String playTime = v.getDuration() != null
-                            ? String.format("%d:%02d", v.getDuration() / 60, v.getDuration() % 60)
-                            : "0:00";
+                    String playTime = v.getDuration() != null ? v.getDuration() : "0:00";
 
                     return DashboardResponse.RecentVideo.builder()
                             .videoId(v.getVideoId())
