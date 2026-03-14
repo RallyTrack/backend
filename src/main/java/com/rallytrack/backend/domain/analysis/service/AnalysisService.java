@@ -90,18 +90,8 @@ public class AnalysisService {
         video.setMatchScore(request.getMyScore() + ":" + request.getOpponentScore());
         video.setVideoStatus("COMPLETED");
         video.setSkeletonVideoUrl(request.getSkeletonVideoUrl());
+        video.setDuration(request.getMatchTime());
 
-        // matchTime("8:26") → duration(초) 변환
-        if (request.getMatchTime() != null && request.getMatchTime().contains(":")) {
-            String[] parts = request.getMatchTime().split(":");
-            try {
-                int minutes = Integer.parseInt(parts[0]);
-                int seconds = Integer.parseInt(parts[1]);
-                video.setDuration(minutes * 60 + seconds);
-            } catch (NumberFormatException e) {
-                // 변환 실패 시 무시
-            }
-        }
 
         videoRepository.save(video);
     }

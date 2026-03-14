@@ -24,7 +24,7 @@ public class VideoDetailResponse {
         private String videoUrl;
         private String skeletonVideoUrl;
         private String thumbnailUrl;
-        private Integer duration;
+        private String duration;
     }
 
     @Getter

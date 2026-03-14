@@ -46,7 +46,7 @@ public class S3Service {
     }
 
     public String generatePresignedUrl(String s3Url) {
-        String key = s3Url.substring(s3Url.indexOf("videos/"));
+        String key = s3Url.substring(s3Url.indexOf(".amazonaws.com/") + ".amazonaws.com/".length());
 
         GetObjectRequest getObjectRequest = GetObjectRequest.builder()
                 .bucket(bucket)
@@ -77,7 +77,7 @@ public class S3Service {
     }
 
     public void deleteFile(String s3Url) {
-        String key = s3Url.substring(s3Url.indexOf("videos/"));
+        String key = s3Url.substring(s3Url.indexOf(".amazonaws.com/") + ".amazonaws.com/".length());
 
         DeleteObjectRequest deleteRequest = DeleteObjectRequest.builder()
                 .bucket(bucket)
