@@ -20,6 +20,7 @@ public class AnalysisCompleteRequest {  // 분석서버가 보내는 json의 모
     private String abilityMetrics;
     private String aiFeedback;
     private List<TimelineEventRequest> timelineEvents;
+    private String skeletonVideoUrl;
 
     @Getter
     @NoArgsConstructor
