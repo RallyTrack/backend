@@ -3,6 +3,11 @@ package com.rallytrack.backend.domain.analysis.entity;
 import com.rallytrack.backend.domain.video.entity.Video;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.CreationTimestamp;
+
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "analysis_results")
@@ -18,34 +23,34 @@ public class AnalysisResult {
     @Column(name = "analysis_id")
     private Long analysisId;
 
-    @Column(name = "my_score")
-    private Integer myScore;
+    @OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "video_id", unique = true)
+    private Video video;
 
-    @Column(name = "opponent_score")
-    private Integer opponentScore;
+    // AI 서버 파이프라인 원본 결과
+    @Column(name = "video_fps")
+    private Float videoFps;
 
+    @Column(name = "total_hits")
+    private Integer totalHits;
+
+    // 개별 타점은 hits 테이블에 저장 (hits_data에서 파생)
+    @OneToMany(mappedBy = "analysisResult", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
+    private List<Hit> hits = new ArrayList<>();
+
+    // hits_data 기반 파생 점수 (코트 상단/하단 기준)
+    @Column(name = "top_player_score")
+    private Integer topPlayerScore;
+
+    @Column(name = "bottom_player_score")
+    private Integer bottomPlayerScore;
+
+    // "TOP_WIN" | "BOTTOM_WIN" | "DRAW"
     @Column(name = "match_outcome")
     private String matchOutcome;
 
-    @Column(name = "total_stroke_count")
-    private Integer totalStrokeCount;
-
-    @Column(name = "match_time")
-    private String matchTime;
-
-    @Column(name = "heatmap_data", columnDefinition = "JSON")
-    private String heatmapData;
-
-    @Column(name = "stroke_types", columnDefinition = "JSON")
-    private String strokeTypes;
-
-    @Column(name = "ability_metrics", columnDefinition = "JSON")
-    private String abilityMetrics;
-
-    @Column(name = "ai_feedback", columnDefinition = "TEXT")
-    private String aiFeedback;
-
-    @OneToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "video_id")
-    private Video video;
+    @CreationTimestamp
+    @Column(name = "created_at", updatable = false)
+    private LocalDateTime createdAt;
 }
