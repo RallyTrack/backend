@@ -26,17 +26,22 @@ public class Video {
     @Column(nullable = false)
     private String title;
 
-    @Column(name = "s3_url")
+    // URL 컬럼은 length = 500 명시 (기본값 255로 자동 ALTER 방지)
+    @Column(name = "s3_url", length = 500)
     private String s3Url;
 
-    @Column(name = "skeleton_video_url")
+    @Column(name = "skeleton_video_url", length = 500)
     private String skeletonVideoUrl;
 
-    @Column(name = "thumbnail_url")
+    @Column(name = "minimap_video_url", length = 500)
+    private String minimapVideoUrl;
+
+    @Column(name = "thumbnail_url", length = 500)
     private String thumbnailUrl;
 
-    @Column
-    private String duration;
+    // 영상 길이 (초 단위 정수) — 대시보드 총 분석 시간 집계 시 SUM(duration_seconds) 사용
+    @Column(name = "duration_seconds")
+    private Integer durationSeconds;
 
     @Column(name = "video_status")
     @Builder.Default
@@ -45,7 +50,7 @@ public class Video {
     @Column(name = "match_score")
     private String matchScore;
 
-    @Column(name = "match_date")    // 2026-02-22 형식으로 입력
+    @Column(name = "match_date")
     @Schema(description = "경기 날짜 (YYYY-MM-DD 형식)", example = "2026-02-22")
     private LocalDate matchDate;
 

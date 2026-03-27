@@ -23,40 +23,39 @@ public class DashboardService {
 
     @Transactional(readOnly = true)
     public DashboardResponse getDashboard(Long userId) {
-        List<Video> videos = videoRepository.findByUserIdAndVideoStatusNotOrderByUploadDateDesc(userId, "DELETED");
+        List<Video> videos = videoRepository
+                .findByUserIdAndVideoStatusNotOrderByUploadDateDesc(userId, "DELETED");
 
-        // 총 분석 시간 계산
+        // 총 분석 시간 (초) 집계 — durationSeconds(Integer)로 단순 합산
         int totalSeconds = videos.stream()
-                .map(Video::getDuration)
-                .filter(d -> d != null && d.contains(":"))
-                .mapToInt(d -> {
-                    String[] parts = d.split(":");
-                    return Integer.parseInt(parts[0]) * 60 + Integer.parseInt(parts[1]);
-                })
+                .filter(v -> v.getDurationSeconds() != null)
+                .mapToInt(Video::getDurationSeconds)
                 .sum();
+
         String totalTime = String.format("%d시간 %d분",
                 totalSeconds / 3600, (totalSeconds % 3600) / 60);
 
-        // 평균 점수 계산
+        // 평균 점수 (top 플레이어 기준)
         int avgScore = 0;
         if (!videos.isEmpty()) {
-            int totalMyScore = 0;
+            int totalTopScore = 0;
             int count = 0;
             for (Video v : videos) {
                 Optional<AnalysisResult> ar = analysisResultRepository.findByVideoVideoId(v.getVideoId());
-                if (ar.isPresent() && ar.get().getMyScore() != null) {
-                    totalMyScore += ar.get().getMyScore();
+                if (ar.isPresent() && ar.get().getTopPlayerScore() != null) {
+                    totalTopScore += ar.get().getTopPlayerScore();
                     count++;
                 }
             }
-            if (count > 0) avgScore = totalMyScore / count;
+            if (count > 0) avgScore = totalTopScore / count;
         }
 
-        // 최근 영상 리스트
+        // 최근 영상 리스트 (최대 10개)
         List<DashboardResponse.RecentVideo> recentVideos = videos.stream()
                 .limit(10)
                 .map(v -> {
-                    String playTime = v.getDuration() != null ? v.getDuration() : "0:00";
+                    // 화면 표시용 시간 문자열 변환 — 초 → "M:SS"
+                    String playTime = formatDuration(v.getDurationSeconds());
 
                     return DashboardResponse.RecentVideo.builder()
                             .videoId(v.getVideoId())
@@ -83,5 +82,16 @@ public class DashboardService {
                         .build())
                 .recentVideos(recentVideos)
                 .build();
+    }
+
+    // ── 헬퍼 ─────────────────────────────────────────────────
+
+    /**
+     * 초 단위 정수를 "M:SS" 형태 문자열로 변환합니다.
+     * null이거나 0 이하면 "0:00" 반환.
+     */
+    private String formatDuration(Integer durationSeconds) {
+        if (durationSeconds == null || durationSeconds <= 0) return "0:00";
+        return String.format("%d:%02d", durationSeconds / 60, durationSeconds % 60);
     }
 }
