@@ -1,5 +1,6 @@
 package com.rallytrack.backend.domain.video.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rallytrack.backend.config.S3Service;
 import com.rallytrack.backend.domain.analysis.repository.AnalysisResultRepository;
 import com.rallytrack.backend.domain.user.entity.User;
@@ -36,6 +37,7 @@ public class VideoService {
     private final UserRepository userRepository;
     private final S3Service s3Service;
     private final RestTemplate restTemplate;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     private static final String S3_BUCKET = "rallytrack-videos";
     private static final String S3_REGION = "us-east-1";
@@ -44,11 +46,16 @@ public class VideoService {
 
     @Transactional
     public VideoUploadResponse uploadVideo(Long userId, MultipartFile videoFile,
-                                           String title, String matchDate) {
+                                           String title, MultipartFile thumbnailImage, String courtCorners) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
 
-        LocalDate parsedDate = LocalDate.parse(matchDate);
+        String thumbnailS3Url = null;
+        try {
+            thumbnailS3Url = s3Service.upLoadFile(thumbnailImage);
+        } catch (IOException e) {
+            System.out.println("썸네일 업로드 실패: " + e.getMessage());
+        }
 
         String s3Url;
         try {
@@ -57,12 +64,28 @@ public class VideoService {
             throw new RuntimeException("영상 파일 업로드에 실패했습니다.");
         }
 
+        Map<String, Map<String, Integer>> corners;
+        try {
+            corners = objectMapper.readValue(courtCorners, Map.class);
+        } catch (Exception e) {
+            throw new RuntimeException("코트 코너 데이터 파싱 실패", e);
+        }
+
         Video video = Video.builder()
                 .title(title)
                 .s3Url(s3Url)
-                .matchDate(parsedDate)
+                .thumbnailUrl(thumbnailS3Url)
+                .matchDate(LocalDate.now())
                 .videoStatus("PROCESSING")
                 .user(user)
+                .courtTopLeftX(corners.get("topLeft").get("x"))
+                .courtTopLeftY(corners.get("topLeft").get("y"))
+                .courtTopRightX(corners.get("topRight").get("x"))
+                .courtTopRightY(corners.get("topRight").get("y"))
+                .courtBottomLeftX(corners.get("bottomLeft").get("x"))
+                .courtBottomLeftY(corners.get("bottomLeft").get("y"))
+                .courtBottomRightX(corners.get("bottomRight").get("x"))
+                .courtBottomRightY(corners.get("bottomRight").get("y"))
                 .build();
 
         Video saved = videoRepository.save(video);
@@ -86,6 +109,15 @@ public class VideoService {
             analyzeRequest.put("skeletonVideoUrl",  skeletonVideoUrl);
             analyzeRequest.put("minimapUploadUrl",  minimapUploadUrl);
             analyzeRequest.put("minimapVideoUrl",   minimapVideoUrl);
+
+            Map<String, Object> courtCornersMap = new HashMap<>();
+            courtCornersMap.put("topLeft",     Map.of("x", saved.getCourtTopLeftX(),     "y", saved.getCourtTopLeftY()));
+            courtCornersMap.put("topRight",    Map.of("x", saved.getCourtTopRightX(),    "y", saved.getCourtTopRightY()));
+            courtCornersMap.put("bottomLeft",  Map.of("x", saved.getCourtBottomLeftX(),  "y", saved.getCourtBottomLeftY()));
+            courtCornersMap.put("bottomRight", Map.of("x", saved.getCourtBottomRightX(), "y", saved.getCourtBottomRightY()));
+
+            analyzeRequest.put("courtCorners", courtCornersMap);
+
 
             restTemplate.postForEntity(
                     "http://localhost:8000/analyze",
