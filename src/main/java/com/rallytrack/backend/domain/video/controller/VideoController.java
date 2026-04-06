@@ -28,9 +28,9 @@ public class VideoController {
     public ResponseEntity<ApiResponse<VideoUploadResponse>> uploadVideo(
             HttpServletRequest httpRequest,
             @RequestParam("videoFile") @Schema(description = "영상 파일 (최대 500MB)") MultipartFile videoFile,
-            @RequestParam("title") String title,
-            @RequestParam(value = "matchDate") String matchDate) {
-
+            @RequestParam("title") String title ,
+            @RequestParam("thumbnailImage") MultipartFile thumbnailImage,
+            @RequestParam("courtCorners") String courtCorners) {
         Long userId = (Long) httpRequest.getAttribute("userId");
 
         if (title == null || title.isBlank()) {
@@ -43,7 +43,7 @@ public class VideoController {
                     .body(ApiResponse.error(400, "영상 파일을 선택해주세요"));
         }
 
-        VideoUploadResponse response = videoService.uploadVideo(userId, videoFile, title, matchDate);
+        VideoUploadResponse response = videoService.uploadVideo(userId, videoFile, title, thumbnailImage, courtCorners);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.created("영상이 성공적으로 업로드되었습니다.", response));
     }
