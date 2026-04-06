@@ -36,6 +36,31 @@ public class Video {
     @Column(name = "minimap_video_url", length = 500)
     private String minimapVideoUrl;
 
+    @Column(name = "court_top_left_x")
+    private Integer courtTopLeftX;
+
+    @Column(name = "court_top_left_y")
+    private Integer courtTopLeftY;
+
+    @Column(name = "court_top_right_x")
+    private Integer courtTopRightX;
+
+    @Column(name = "court_top_right_y")
+    private Integer courtTopRightY;
+
+    @Column(name = "court_bottom_left_x")
+    private Integer courtBottomLeftX;
+
+    @Column(name = "court_bottom_left_y")
+    private Integer courtBottomLeftY;
+
+    @Column(name = "court_bottom_right_x")
+    private Integer courtBottomRightX;
+
+    @Column(name = "court_bottom_right_y")
+    private Integer courtBottomRightY;
+
+
     @Column(name = "thumbnail_url", length = 500)
     private String thumbnailUrl;
 
