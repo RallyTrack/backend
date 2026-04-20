@@ -43,8 +43,9 @@ public class UserService {
         user.setLastLogin(LocalDateTime.now());
         userRepository.save(user);
 
-        // 기존 리프레시 토큰 삭제 (기기당 하나만 유지)
-        refreshTokenRepository.deleteByUserId(user.getId());
+        // ✅ 개선: 네이티브 쿼리를 사용한 안전한 삭제 (권장 방법)
+        // RefreshTokenRepository에 deleteByUserIdSafely 메서드가 추가되어 있어야 합니다.
+        refreshTokenRepository.deleteByUserIdSafely(user.getId());
 
         String accessToken = jwtUtil.generateAccessToken(user.getId(), user.getEmail());
         String refreshTokenStr = jwtUtil.generateRefreshToken(user.getId(), user.getEmail());
