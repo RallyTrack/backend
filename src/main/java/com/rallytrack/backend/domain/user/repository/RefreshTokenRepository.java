@@ -15,7 +15,7 @@ public interface RefreshTokenRepository extends JpaRepository<RefreshToken, Long
     
     // ✅ 추가: 안전한 삭제를 위한 네이티브 쿼리 (권장 방법)
     // 동시 삭제 시도 시에도 예외를 발생시키지 않습니다.
-    @Modifyingg
+    @Modifying
     @Query(value = "DELETE FROM refresh_tokens WHERE user_id = :userId", nativeQuery = true)
     void deleteByUserIdSafely(@Param("userId") Long userId);
 }
