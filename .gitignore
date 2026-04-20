@@ -4,7 +4,7 @@ build/
 !gradle/wrapper/gradle-wrapper.jar
 !**/src/main/**/build/
 src/main/resources/application.yml
-
+src/main/java/com/rallytrack/backend/resources/application.yml
 # Java class files
 *.class
 
