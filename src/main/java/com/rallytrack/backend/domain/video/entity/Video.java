@@ -60,6 +60,18 @@ public class Video {
     @Column(name = "court_bottom_right_y")
     private Integer courtBottomRightY;
 
+    @Column(name = "net_top_left_x")
+    private Integer netTopLeftX;
+
+    @Column(name = "net_top_left_y")
+    private Integer netTopLeftY;
+
+    @Column(name = "net_top_right_x")
+    private Integer netTopRightX;
+
+    @Column(name = "net_top_right_y")
+    private Integer netTopRightY;
+
 
     @Column(name = "thumbnail_url", length = 500)
     private String thumbnailUrl;

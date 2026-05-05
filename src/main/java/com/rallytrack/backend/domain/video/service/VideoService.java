@@ -86,6 +86,10 @@ public class VideoService {
                 .courtBottomLeftY(corners.get("bottomLeft").get("y"))
                 .courtBottomRightX(corners.get("bottomRight").get("x"))
                 .courtBottomRightY(corners.get("bottomRight").get("y"))
+                .netTopLeftX(corners.containsKey("netTopLeft") ? corners.get("netTopLeft").get("x") : null)
+                .netTopLeftY(corners.containsKey("netTopLeft") ? corners.get("netTopLeft").get("y") : null)
+                .netTopRightX(corners.containsKey("netTopRight") ? corners.get("netTopRight").get("x") : null)
+                .netTopRightY(corners.containsKey("netTopRight") ? corners.get("netTopRight").get("y") : null)
                 .build();
 
         Video saved = videoRepository.save(video);
@@ -115,6 +119,8 @@ public class VideoService {
             courtCornersMap.put("topRight",    Map.of("x", saved.getCourtTopRightX(),    "y", saved.getCourtTopRightY()));
             courtCornersMap.put("bottomLeft",  Map.of("x", saved.getCourtBottomLeftX(),  "y", saved.getCourtBottomLeftY()));
             courtCornersMap.put("bottomRight", Map.of("x", saved.getCourtBottomRightX(), "y", saved.getCourtBottomRightY()));
+            if(saved.getNetTopLeftX() != null) courtCornersMap.put("netTopLeft", Map.of("x", saved.getNetTopLeftX(), "y", saved.getNetTopLeftY()));
+            if(saved.getNetTopRightX() != null) courtCornersMap.put("netTopRight", Map.of("x", saved.getNetTopRightX(), "y", saved.getNetTopRightY()));
 
             analyzeRequest.put("courtCorners", courtCornersMap);
 
