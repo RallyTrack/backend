@@ -1,5 +1,6 @@
 package com.rallytrack.backend.domain.dashboard.service;
 
+import com.rallytrack.backend.config.S3Service;
 import com.rallytrack.backend.domain.analysis.entity.AnalysisResult;
 import com.rallytrack.backend.domain.analysis.repository.AnalysisResultRepository;
 import com.rallytrack.backend.domain.dashboard.dto.DashboardResponse;
@@ -20,6 +21,7 @@ public class DashboardService {
 
     private final VideoRepository videoRepository;
     private final AnalysisResultRepository analysisResultRepository;
+    private final S3Service s3Service;  // ✅ 추가: 썸네일 presigned URL 생성을 위한 S3Service
 
     @Transactional(readOnly = true)
     public DashboardResponse getDashboard(Long userId) {
@@ -56,6 +58,11 @@ public class DashboardService {
                 .map(v -> {
                     // 화면 표시용 시간 문자열 변환 — 초 → "M:SS"
                     String playTime = formatDuration(v.getDurationSeconds());
+                    
+                    // ✅ 수정: thumbnailUrl을 presigned URL로 변환
+                    String thumbnailUrl = v.getThumbnailUrl() != null 
+                        ? s3Service.generatePresignedUrl(v.getThumbnailUrl())
+                        : null;
 
                     return DashboardResponse.RecentVideo.builder()
                             .videoId(v.getVideoId())
@@ -65,7 +72,7 @@ public class DashboardService {
                                     : v.getUploadDate().format(DateTimeFormatter.ISO_LOCAL_DATE))
                             .playTime(playTime)
                             .matchScore(v.getMatchScore())
-                            .thumbnailUrl(v.getThumbnailUrl())
+                            .thumbnailUrl(thumbnailUrl)  // ✅ presigned URL 사용
                             .actions(DashboardResponse.Actions.builder()
                                     .viewVideoUrl("/api/v1/videos/" + v.getVideoId())
                                     .viewAnalysisUrl("/api/v1/analysis/" + v.getVideoId())
