@@ -119,10 +119,13 @@ public class VideoService {
             courtCornersMap.put("topRight",    Map.of("x", saved.getCourtTopRightX(),    "y", saved.getCourtTopRightY()));
             courtCornersMap.put("bottomLeft",  Map.of("x", saved.getCourtBottomLeftX(),  "y", saved.getCourtBottomLeftY()));
             courtCornersMap.put("bottomRight", Map.of("x", saved.getCourtBottomRightX(), "y", saved.getCourtBottomRightY()));
-            if(saved.getNetTopLeftX() != null) courtCornersMap.put("netTopLeft", Map.of("x", saved.getNetTopLeftX(), "y", saved.getNetTopLeftY()));
-            if(saved.getNetTopRightX() != null) courtCornersMap.put("netTopRight", Map.of("x", saved.getNetTopRightX(), "y", saved.getNetTopRightY()));
-
+            if (corners.containsKey("netTopLeft"))
+                courtCornersMap.put("netTopLeft", corners.get("netTopLeft"));
+            if (corners.containsKey("netTopRight"))
+                courtCornersMap.put("netTopRight", corners.get("netTopRight"));
             analyzeRequest.put("courtCorners", courtCornersMap);
+
+            System.out.println("[AI 요청 body] courtCorners: " + objectMapper.writeValueAsString(courtCornersMap));
 
 
             restTemplate.postForEntity(
@@ -131,6 +134,7 @@ public class VideoService {
                     String.class
             );
         } catch (Exception e) {
+            e.printStackTrace();
             // AI 서버 호출 실패해도 업로드 자체는 성공으로 처리
         }
 
