@@ -46,7 +46,8 @@ public class VideoService {
 
     @Transactional
     public VideoUploadResponse uploadVideo(Long userId, MultipartFile videoFile,
-                                           String title, MultipartFile thumbnailImage, String courtCorners) {
+                                           String title, MultipartFile thumbnailImage, String courtCorners,
+                                           Integer durationSeconds) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
 
@@ -90,6 +91,7 @@ public class VideoService {
                 .netTopLeftY(corners.containsKey("netTopLeft") ? corners.get("netTopLeft").get("y") : null)
                 .netTopRightX(corners.containsKey("netTopRight") ? corners.get("netTopRight").get("x") : null)
                 .netTopRightY(corners.containsKey("netTopRight") ? corners.get("netTopRight").get("y") : null)
+                .durationSeconds(durationSeconds != null && durationSeconds > 0 ? durationSeconds : null)
                 .build();
 
         Video saved = videoRepository.save(video);

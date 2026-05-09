@@ -66,7 +66,7 @@ public class AnalysisService {
                 .opponentScore(result.getTopPlayerScore() != null ? result.getTopPlayerScore() : 0)
                 .matchOutcome(toFrontendOutcome(result.getTopPlayerScore(), result.getBottomPlayerScore()))
                 .totalStrokeCount(result.getTotalHits() != null ? result.getTotalHits() : hits.size())
-                .matchTime(formatMatchTime(hits))
+                .matchTime(formatDurationSeconds(result.getVideo().getDurationSeconds()))
                 .build();
 
         return AnalysisReportResponse.builder()
@@ -146,7 +146,9 @@ public class AnalysisService {
 
         // Video 업데이트
         video.setVideoStatus("COMPLETED");
-        video.setDurationSeconds(deriveDurationSeconds(request.getHitsData()));
+        if (video.getDurationSeconds() == null || video.getDurationSeconds() <= 0) {
+            video.setDurationSeconds(deriveDurationSeconds(request.getHitsData()));
+        }
         video.setMatchScore(score.topPlayerScore + ":" + score.bottomPlayerScore);
         if (request.getSkeletonVideoUrl() != null) {
             video.setSkeletonVideoUrl(request.getSkeletonVideoUrl());
@@ -288,6 +290,13 @@ public class AnalysisService {
         if (bottom > top) return "WIN";
         if (bottom < top) return "LOSE";
         return "DRAW";
+    }
+
+    private String formatDurationSeconds(Integer durationSeconds) {
+        if (durationSeconds == null || durationSeconds <= 0) {
+            return "0:00";
+        }
+        return String.format("%d:%02d", durationSeconds / 60, durationSeconds % 60);
     }
 
     private String formatMatchTime(List<Hit> hits) {
