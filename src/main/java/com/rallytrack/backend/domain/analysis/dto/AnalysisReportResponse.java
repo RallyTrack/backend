@@ -12,6 +12,15 @@ import java.util.List;
 public class AnalysisReportResponse {
 
     private Long videoId;
+    private SummaryDto summary;
+    private PlayersDto players;
+
+    // 추후 삭제할 legacy, 프론트단에서 flat field참조 안하게 되면 삭제
+    private PositionAnalysisDto positionAnalysis;
+    private StrokeTypesDto strokeTypes;
+    private AbilityMetricsDto abilityMetrics;
+    private AiCoachingDto aiCoaching;
+
     private Float videoFps;
     private Integer totalHits;
     private List<HitDto> hitsData;
