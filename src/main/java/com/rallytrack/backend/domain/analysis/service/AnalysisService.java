@@ -1,7 +1,6 @@
 package com.rallytrack.backend.domain.analysis.service;
 
-import com.rallytrack.backend.domain.analysis.dto.AnalysisCompleteRequest;
-import com.rallytrack.backend.domain.analysis.dto.AnalysisReportResponse;
+import com.rallytrack.backend.domain.analysis.dto.*;
 import com.rallytrack.backend.domain.analysis.entity.AnalysisResult;
 import com.rallytrack.backend.domain.analysis.entity.Hit;
 import com.rallytrack.backend.domain.analysis.repository.AnalysisResultRepository;
@@ -44,8 +43,42 @@ public class AnalysisService {
                         .build())
                 .collect(Collectors.toList());
 
+        List<Hit> hits = result.getHits();
+
+        int topHitCount = (int) hits.stream()
+                .filter(h -> "top".equals(normalizePlayer(h.getPlayer())))
+                .count();
+
+        int bottomHitCount = (int) hits.stream()
+                .filter(h -> "bottom".equals(normalizePlayer(h.getPlayer())))
+                .count();
+
+        PlayerReportDto topReport = buildPlayerReport(topHitCount);
+        PlayerReportDto bottomReport = buildPlayerReport(bottomHitCount);
+
+        PlayersDto players = PlayersDto.builder()
+                .top(topReport)
+                .bottom(bottomReport)
+                .build();
+
+        SummaryDto summary = SummaryDto.builder()
+                .myScore(result.getBottomPlayerScore() != null ? result.getBottomPlayerScore() : 0)
+                .opponentScore(result.getTopPlayerScore() != null ? result.getTopPlayerScore() : 0)
+                .matchOutcome(toFrontendOutcome(result.getTopPlayerScore(), result.getBottomPlayerScore()))
+                .totalStrokeCount(result.getTotalHits() != null ? result.getTotalHits() : hits.size())
+                .matchTime(formatDurationSeconds(result.getVideo().getDurationSeconds()))
+                .build();
+
         return AnalysisReportResponse.builder()
                 .videoId(videoId)
+                .summary(summary)
+                .players(players)
+                // legacy flat fields: 일단 bottom 기준으로 mirror
+                .positionAnalysis(bottomReport.getPositionAnalysis())
+                .strokeTypes(bottomReport.getStrokeTypes())
+                .abilityMetrics(bottomReport.getAbilityMetrics())
+                .aiCoaching(bottomReport.getAiCoaching())
+                // 기존 debug/호환 필드
                 .videoFps(result.getVideoFps())
                 .totalHits(result.getTotalHits())
                 .hitsData(hitDtos)
@@ -113,7 +146,9 @@ public class AnalysisService {
 
         // Video 업데이트
         video.setVideoStatus("COMPLETED");
-        video.setDurationSeconds(deriveDurationSeconds(request.getHitsData()));
+        if (video.getDurationSeconds() == null || video.getDurationSeconds() <= 0) {
+            video.setDurationSeconds(deriveDurationSeconds(request.getHitsData()));
+        }
         video.setMatchScore(score.topPlayerScore + ":" + score.bottomPlayerScore);
         if (request.getSkeletonVideoUrl() != null) {
             video.setSkeletonVideoUrl(request.getSkeletonVideoUrl());
@@ -206,4 +241,78 @@ public class AnalysisService {
             this.matchOutcome      = matchOutcome;
         }
     }
+
+    private PlayerReportDto buildPlayerReport(int hitCount) {
+        return PlayerReportDto.builder()
+                .positionAnalysis(PositionAnalysisDto.builder()
+                        .heatmapData(List.of())
+                        .build())
+                .strokeTypes(StrokeTypesDto.builder()
+                        .smash(0)
+                        .clear(0)
+                        .drop(0)
+                        .drive(0)
+                        .serve(0)
+                        .net(0)
+                        .others(hitCount)
+                        .build())
+                .abilityMetrics(AbilityMetricsDto.builder()
+                        .smash(0)
+                        .avgRallyTime(0)
+                        .speed(0)
+                        .distance(0)
+                        .errorRate(0)
+                        .build())
+                .aiCoaching(AiCoachingDto.builder()
+                        .feedbackText("")
+                        .build())
+                .build();
+    }
+
+    private String normalizePlayer(String player) {
+        if (player == null) return "bottom";
+
+        if ("top".equals(player) || "pink_top".equals(player)) {
+            return "top";
+        }
+
+        if ("bottom".equals(player) || "green_bottom".equals(player)) {
+            return "bottom";
+        }
+
+        return "bottom";
+    }
+
+    private String toFrontendOutcome(Integer topPlayerScore, Integer bottomPlayerScore) {
+        int top = topPlayerScore != null ? topPlayerScore : 0;
+        int bottom = bottomPlayerScore != null ? bottomPlayerScore : 0;
+
+        if (bottom > top) return "WIN";
+        if (bottom < top) return "LOSE";
+        return "DRAW";
+    }
+
+    private String formatDurationSeconds(Integer durationSeconds) {
+        if (durationSeconds == null || durationSeconds <= 0) {
+            return "0:00";
+        }
+        return String.format("%d:%02d", durationSeconds / 60, durationSeconds % 60);
+    }
+
+    private String formatMatchTime(List<Hit> hits) {
+        if (hits == null || hits.isEmpty()) {
+            return "0:00";
+        }
+
+        int seconds = hits.stream()
+                .map(Hit::getTimeSec)
+                .filter(t -> t != null)
+                .mapToInt(Float::intValue)
+                .max()
+                .orElse(0);
+
+        return String.format("%d:%02d", seconds / 60, seconds % 60);
+    }
+
+
 }
