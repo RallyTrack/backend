@@ -142,7 +142,7 @@ public class VideoService {
                                         + objectMapper.writeValueAsString(courtCornersMap));
 
                         restTemplate.postForEntity(
-                                        "http://localhost:8000/analyze",
+                                        "http://localhost:8001/analyze",
                                         analyzeRequest,
                                         String.class);
                 } catch (Exception e) {

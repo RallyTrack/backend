@@ -15,6 +15,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -122,6 +124,8 @@ public class AnalysisService {
                         .timeSec(hitData.getTimeSec())
                         .player(hitData.getPlayer())
                         .strokeType(hitData.getStrokeType())
+                        .playerX(hitData.getPlayerX())
+                        .playerY(hitData.getPlayerY())
                         .build());
             }
         }
@@ -258,8 +262,15 @@ public class AnalysisService {
         long net    = playerHits.stream().filter(h -> "Net".equals(h.getStrokeType())).count();
         long others = playerHits.stream().filter(h -> {
             String s = h.getStrokeType();
-            return s == null || !List.of("Smash","Clear","Drop","Drive","Serve","Net").contains(s);
+            return s == null || !List.of("Smash", "Clear", "Drop", "Drive", "Serve", "Net").contains(s);
         }).count();
+
+        List<Hit> allHitsSorted = allHits.stream()
+                .filter(h -> h.getTimeSec() != null)
+                .sorted(Comparator.comparing(Hit::getTimeSec))
+                .collect(Collectors.toList());
+
+        AbilityMetricsDto abilityMetrics = calculateAbilityMetrics(allHitsSorted, playerHits, playerSide);
 
         return PlayerReportDto.builder()
                 .positionAnalysis(PositionAnalysisDto.builder()
@@ -274,13 +285,7 @@ public class AnalysisService {
                         .net((int) net)
                         .others((int) others)
                         .build())
-                .abilityMetrics(AbilityMetricsDto.builder()
-                        .smash(0)
-                        .avgRallyTime(0)
-                        .speed(0)
-                        .distance(0)
-                        .errorRate(0)
-                        .build())
+                .abilityMetrics(abilityMetrics)
                 .aiCoaching(AiCoachingDto.builder()
                         .feedbackText("")
                         .build())
@@ -332,5 +337,139 @@ public class AnalysisService {
         return String.format("%d:%02d", seconds / 60, seconds % 60);
     }
 
+    /**
+     * Hit 데이터(timeSec, player, strokeType, playerX/Y)로 5개 능력치(0~100)를 산출.
+     *
+     * ① 스매시      : smash 타격 비율 × 2.5          (40% rate → 100)
+     * ② 평균 랠리 시간 : 참여 랠리 평균 지속초 / 30s × 100   (30초 → 100)
+     * ③ 속도        : (10 - 평균타격간격초) / 8 × 100    (2초 간격 → 100)
+     * ④ 이동 거리   : playerX/Y 있으면 실측 이동량, 없으면 랠리 참여율로 근사
+     * ⑤ 실책률      : 랠리 마지막 타격자 비율            (낮을수록 실책 적음)
+     */
+    private AbilityMetricsDto calculateAbilityMetrics(
+            List<Hit> allHitsSorted,
+            List<Hit> playerHits,
+            String playerSide
+    ) {
+        if (playerHits.isEmpty() || allHitsSorted.isEmpty()) {
+            return AbilityMetricsDto.builder()
+                    .smash(0).avgRallyTime(0).speed(0).distance(0).errorRate(0)
+                    .build();
+        }
 
+        int totalPlayerHits = playerHits.size();
+
+        // 전체 경기 활성 시간 (최소 1초)
+        float matchDurationSec =
+                allHitsSorted.get(allHitsSorted.size() - 1).getTimeSec()
+                - allHitsSorted.get(0).getTimeSec();
+        if (matchDurationSec < 1f) matchDurationSec = 1f;
+
+        // 랠리 분리 (3초 이상 공백 = 새 랠리)
+        List<List<Hit>> rallies = splitIntoRallies(allHitsSorted, 3.0f);
+
+        // ① 스매시 — smash 비율 × 2.5 (40% rate = 100점)
+        long smashCount = playerHits.stream()
+                .filter(h -> "Smash".equals(h.getStrokeType()))
+                .count();
+        int smashScore = clamp((int) Math.round(smashCount * 100.0 / totalPlayerHits * 2.5));
+
+        // ② 평균 랠리 시간 — 이 플레이어가 참여한 랠리의 평균 지속 초 / 30s × 100
+        double avgRallyDuration = rallies.stream()
+                .filter(r -> r.size() >= 2 &&
+                        r.stream().anyMatch(h -> playerSide.equals(normalizePlayer(h.getPlayer()))))
+                .mapToDouble(r -> (double)(
+                        r.get(r.size() - 1).getTimeSec() - r.get(0).getTimeSec()))
+                .average()
+                .orElse(0.0);
+        int avgRallyTimeScore = clamp((int) Math.round(avgRallyDuration / 30.0 * 100));
+
+        // ③ 속도 — 경기 시간 ÷ 타격 수 = 평균 타격 간격 / 2초→100, 10초→0
+        double avgInterval = matchDurationSec / (double) totalPlayerHits;
+        int speedScore = clamp((int) Math.round((10.0 - avgInterval) / 8.0 * 100));
+
+        // ④ 이동 거리
+        List<Hit> sortedPlayerHits = playerHits.stream()
+                .filter(h -> h.getTimeSec() != null)
+                .sorted(Comparator.comparing(Hit::getTimeSec))
+                .collect(Collectors.toList());
+
+        boolean hasPosData = sortedPlayerHits.stream()
+                .anyMatch(h -> h.getPlayerX() != null && h.getPlayerY() != null);
+
+        int distanceScore;
+        if (hasPosData) {
+            // 실측: 연속 타격 간 유클리드 거리 합산 (0~1 좌표계)
+            // 기준값: 30타 × 평균이동 0.2 = 6.0 → 100점
+            double totalDist = 0.0;
+            Hit prev = null;
+            for (Hit h : sortedPlayerHits) {
+                if (h.getPlayerX() == null || h.getPlayerY() == null) { prev = null; continue; }
+                if (prev != null && prev.getPlayerX() != null) {
+                    double dx = h.getPlayerX() - prev.getPlayerX();
+                    double dy = h.getPlayerY() - prev.getPlayerY();
+                    totalDist += Math.sqrt(dx * dx + dy * dy);
+                }
+                prev = h;
+            }
+            distanceScore = clamp((int) Math.round(totalDist / 6.0 * 100));
+        } else {
+            // 위치 없음 → 랠리 참여율로 근사 (95% 참여 = 100점)
+            long ralliesParticipated = rallies.stream()
+                    .filter(r -> r.stream()
+                            .anyMatch(h -> playerSide.equals(normalizePlayer(h.getPlayer()))))
+                    .count();
+            distanceScore = clamp((int) Math.round(
+                    ralliesParticipated * 100.0 / Math.max(1, rallies.size()) * (100.0 / 95.0)));
+        }
+
+        // ⑤ 실책률 — 랠리 마지막 타격자 = 실점 가정
+        long ralliesParticipated = rallies.stream()
+                .filter(r -> r.stream()
+                        .anyMatch(h -> playerSide.equals(normalizePlayer(h.getPlayer()))))
+                .count();
+        long errors = rallies.stream()
+                .filter(r -> !r.isEmpty() &&
+                        playerSide.equals(normalizePlayer(r.get(r.size() - 1).getPlayer())))
+                .count();
+        int errorRateScore = ralliesParticipated > 0
+                ? clamp((int) Math.round(errors * 100.0 / ralliesParticipated))
+                : 0;
+
+        return AbilityMetricsDto.builder()
+                .smash(smashScore)
+                .avgRallyTime(avgRallyTimeScore)
+                .speed(speedScore)
+                .distance(distanceScore)
+                .errorRate(errorRateScore)
+                .build();
+    }
+
+    /**
+     * 시간순 정렬된 Hit 목록을 랠리 단위로 분리.
+     * 연속 두 타격 사이 간격이 gapSec 초 초과면 새 랠리.
+     */
+    private List<List<Hit>> splitIntoRallies(List<Hit> sortedHits, float gapSec) {
+        List<List<Hit>> rallies = new ArrayList<>();
+        if (sortedHits.isEmpty()) return rallies;
+
+        List<Hit> current = new ArrayList<>();
+        current.add(sortedHits.get(0));
+
+        for (int i = 1; i < sortedHits.size(); i++) {
+            float gap = sortedHits.get(i).getTimeSec() - sortedHits.get(i - 1).getTimeSec();
+            if (gap > gapSec) {
+                rallies.add(current);
+                current = new ArrayList<>();
+            }
+            current.add(sortedHits.get(i));
+        }
+        rallies.add(current);
+        return rallies;
+    }
+
+    /** 값을 0~100 범위로 클램프. */
+    private static int clamp(int value) {
+        return Math.min(100, Math.max(0, value));
+    }
 }
