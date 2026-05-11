@@ -5,6 +5,7 @@ import com.rallytrack.backend.domain.video.dto.VideoUploadResponse;
 import com.rallytrack.backend.domain.video.service.VideoService;
 import com.rallytrack.backend.global.response.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
@@ -32,6 +33,14 @@ public class VideoController {
             @RequestParam("thumbnailImage") MultipartFile thumbnailImage,
             @RequestParam("courtCorners") String courtCorners,
             @RequestParam(value = "durationSeconds", required = false) Integer durationSeconds,
+            @Parameter(
+                    description = "분석 모드: pro=프로 선수 기준, amateur=아마추어 기준",
+                    schema = @Schema(
+                            allowableValues = {"pro", "amateur"},
+                            defaultValue = "amateur",
+                            example = "amateur"
+                    )
+            )
             @RequestParam(value = "mode", required = false, defaultValue = "amateur") String mode) {
         Long userId = (Long) httpRequest.getAttribute("userId");
 
