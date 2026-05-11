@@ -47,9 +47,10 @@ public class VideoService {
         @Transactional
         public VideoUploadResponse uploadVideo(Long userId, MultipartFile videoFile,
                         String title, MultipartFile thumbnailImage, String courtCorners,
-                        Integer durationSeconds) {
+                        Integer durationSeconds, String mode) {
                 User user = userRepository.findById(userId)
                                 .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
+                String analysisMode = normalizeAnalysisMode(mode);
 
                 String thumbnailS3Url = null;
                 try {
@@ -120,6 +121,7 @@ public class VideoService {
                         analyzeRequest.put("skeletonVideoUrl", skeletonVideoUrl);
                         analyzeRequest.put("minimapUploadUrl", minimapUploadUrl);
                         analyzeRequest.put("minimapVideoUrl", minimapVideoUrl);
+                        analyzeRequest.put("mode", analysisMode);
 
                         Map<String, Object> courtCornersMap = new HashMap<>();
                         courtCornersMap.put("topLeft",
@@ -233,5 +235,9 @@ public class VideoService {
 
         private String buildS3Url(String key) {
                 return String.format("https://%s.s3.%s.amazonaws.com/%s", S3_BUCKET, S3_REGION, key);
+        }
+
+        private String normalizeAnalysisMode(String mode) {
+                return "pro".equalsIgnoreCase(mode != null ? mode.trim() : "") ? "pro" : "amateur";
         }
 }

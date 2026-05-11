@@ -31,7 +31,8 @@ public class VideoController {
             @RequestParam("title") String title,
             @RequestParam("thumbnailImage") MultipartFile thumbnailImage,
             @RequestParam("courtCorners") String courtCorners,
-            @RequestParam(value = "durationSeconds", required = false) Integer durationSeconds) {
+            @RequestParam(value = "durationSeconds", required = false) Integer durationSeconds,
+            @RequestParam(value = "mode", required = false, defaultValue = "amateur") String mode) {
         Long userId = (Long) httpRequest.getAttribute("userId");
 
         if (title == null || title.isBlank()) {
@@ -45,7 +46,7 @@ public class VideoController {
         }
 
         VideoUploadResponse response = videoService.uploadVideo(userId, videoFile, title, thumbnailImage, courtCorners,
-                durationSeconds);
+                durationSeconds, mode);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.created("영상이 성공적으로 업로드되었습니다.", response));
     }
