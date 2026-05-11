@@ -40,5 +40,6 @@ public class AnalysisReportResponse {
         private Integer frame;
         private Float timeSec;
         private String player;
+        private String strokeType;
     }
 }
