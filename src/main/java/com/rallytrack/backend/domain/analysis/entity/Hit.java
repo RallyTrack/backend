@@ -33,4 +33,8 @@ public class Hit {
     // "pink_top" | "green_bottom"
     @Column(name = "player", nullable = false, length = 20)
     private String player;
+
+    // 스트로크 분류 결과 (null 허용 — 분류기 미설치 시)
+    @Column(name = "stroke_type", length = 20)
+    private String strokeType;
 }

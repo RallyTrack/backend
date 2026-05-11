@@ -40,6 +40,7 @@ public class AnalysisService {
                         .frame(h.getFrame())
                         .timeSec(h.getTimeSec())
                         .player(h.getPlayer())
+                        .strokeType(h.getStrokeType())
                         .build())
                 .collect(Collectors.toList());
 
@@ -53,8 +54,8 @@ public class AnalysisService {
                 .filter(h -> "bottom".equals(normalizePlayer(h.getPlayer())))
                 .count();
 
-        PlayerReportDto topReport = buildPlayerReport(topHitCount);
-        PlayerReportDto bottomReport = buildPlayerReport(bottomHitCount);
+        PlayerReportDto topReport = buildPlayerReport(topHitCount, hits, "top");
+        PlayerReportDto bottomReport = buildPlayerReport(bottomHitCount, hits, "bottom");
 
         PlayersDto players = PlayersDto.builder()
                 .top(topReport)
@@ -120,6 +121,7 @@ public class AnalysisService {
                         .frame(hitData.getFrame())
                         .timeSec(hitData.getTimeSec())
                         .player(hitData.getPlayer())
+                        .strokeType(hitData.getStrokeType())
                         .build());
             }
         }
@@ -130,13 +132,14 @@ public class AnalysisService {
                 int ts = hitData.getTimeSec() != null ? hitData.getTimeSec().intValue() : 0;
                 String displayTime = String.format("%d:%02d", ts / 60, ts % 60);
                 String playerLabel = "pink_top".equals(hitData.getPlayer()) ? "상단(핑크)" : "하단(라임)";
+                String strokeLabel = hitData.getStrokeType() != null ? " [" + hitData.getStrokeType() + "]" : "";
 
                 timelineEventRepository.save(TimelineEvent.builder()
                         .video(video)
                         .timestamp(ts)
                         .displayTime(displayTime)
                         .eventType(EventType.HIT)
-                        .eventTitle("#" + hitData.getHitNumber() + " " + playerLabel)
+                        .eventTitle("#" + hitData.getHitNumber() + " " + playerLabel + strokeLabel)
                         .eventDescription(hitData.getPlayer())
                         .hitNumber(hitData.getHitNumber())
                         .player(hitData.getPlayer())
@@ -242,19 +245,34 @@ public class AnalysisService {
         }
     }
 
-    private PlayerReportDto buildPlayerReport(int hitCount) {
+    private PlayerReportDto buildPlayerReport(int hitCount, List<Hit> allHits, String playerSide) {
+        List<Hit> playerHits = allHits.stream()
+                .filter(h -> playerSide.equals(normalizePlayer(h.getPlayer())))
+                .collect(Collectors.toList());
+
+        long smash  = playerHits.stream().filter(h -> "Smash".equals(h.getStrokeType())).count();
+        long clear  = playerHits.stream().filter(h -> "Clear".equals(h.getStrokeType())).count();
+        long drop   = playerHits.stream().filter(h -> "Drop".equals(h.getStrokeType())).count();
+        long drive  = playerHits.stream().filter(h -> "Drive".equals(h.getStrokeType())).count();
+        long serve  = playerHits.stream().filter(h -> "Serve".equals(h.getStrokeType())).count();
+        long net    = playerHits.stream().filter(h -> "Net".equals(h.getStrokeType())).count();
+        long others = playerHits.stream().filter(h -> {
+            String s = h.getStrokeType();
+            return s == null || !List.of("Smash","Clear","Drop","Drive","Serve","Net").contains(s);
+        }).count();
+
         return PlayerReportDto.builder()
                 .positionAnalysis(PositionAnalysisDto.builder()
                         .heatmapData(List.of())
                         .build())
                 .strokeTypes(StrokeTypesDto.builder()
-                        .smash(0)
-                        .clear(0)
-                        .drop(0)
-                        .drive(0)
-                        .serve(0)
-                        .net(0)
-                        .others(hitCount)
+                        .smash((int) smash)
+                        .clear((int) clear)
+                        .drop((int) drop)
+                        .drive((int) drive)
+                        .serve((int) serve)
+                        .net((int) net)
+                        .others((int) others)
                         .build())
                 .abilityMetrics(AbilityMetricsDto.builder()
                         .smash(0)

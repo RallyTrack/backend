@@ -38,5 +38,12 @@ public class AnalysisCompleteRequest {
 
         // "pink_top" | "green_bottom"
         private String player;
+
+        // 스트로크 분류 결과 (없으면 null) — "Serve"|"Defense"|"Lob"|"Smash"|"Drop"|"Drive"|"Net"|"Clear"|"Push"
+        @JsonProperty("stroke_type")
+        private String strokeType;
+
+        @JsonProperty("stroke_confidence")
+        private Float strokeConfidence;
     }
 }
