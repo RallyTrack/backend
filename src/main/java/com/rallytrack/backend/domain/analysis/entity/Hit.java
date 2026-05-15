@@ -37,4 +37,11 @@ public class Hit {
     // 스트로크 분류 결과 (null 허용 — 분류기 미설치 시)
     @Column(name = "stroke_type", length = 20)
     private String strokeType;
+
+    // 타격 시점 선수 중심 좌표 (0.0~1.0 정규화, AI 서버 제공 시에만 저장)
+    @Column(name = "player_x")
+    private Float playerX;
+
+    @Column(name = "player_y")
+    private Float playerY;
 }
