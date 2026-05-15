@@ -45,5 +45,12 @@ public class AnalysisCompleteRequest {
 
         @JsonProperty("stroke_confidence")
         private Float strokeConfidence;
+
+        // 타격 시점 선수 중심 좌표 (0.0~1.0 정규화, AI 서버 미제공 시 null)
+        @JsonProperty("player_x")
+        private Float playerX;
+
+        @JsonProperty("player_y")
+        private Float playerY;
     }
 }
