@@ -11,7 +11,7 @@ import java.util.Map;
 /**
  * AI 서버 → 백엔드 분석 완료 콜백 DTO
  *
- * AI 서버 analysis_router.py의 callback_data와 필드가 일치해야 합니다.
+ * AI 서버 pipeline_service.py의 callback_data와 필드가 일치해야 합니다.
  * hitsData 항목은 snake_case로 전송되므로 @JsonProperty로 명시합니다.
  */
 @Getter
@@ -76,14 +76,12 @@ public class AnalysisCompleteRequest {
 
         private Integer frame;
 
-        // AI 서버에서 소수점 초 단위로 전송 (예: 1.500)
         @JsonProperty("time_sec")
         private Float timeSec;
 
-        // "pink_top" | "green_bottom"
+        // "top" | "bottom"
         private String player;
 
-        // 스트로크 분류 결과 (없으면 null) — "Serve"|"Defense"|"Lob"|"Smash"|"Drop"|"Drive"|"Net"|"Clear"|"Push"
         @JsonProperty("stroke_type")
         private String strokeType;
 
@@ -96,5 +94,13 @@ public class AnalysisCompleteRequest {
 
         @JsonProperty("player_y")
         private Float playerY;
+
+        // 타격 시점 셔틀콕의 미니맵 좌표 (0~100, 히트맵 SVG 좌표계와 동일)
+        // AI 서버 pipeline_service.py Step 7.9에서 frame_to_minimap() 후 주입
+        @JsonProperty("minimap_x")
+        private Float minimapX;
+
+        @JsonProperty("minimap_y")
+        private Float minimapY;
     }
 }

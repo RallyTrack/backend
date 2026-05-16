@@ -26,15 +26,13 @@ public class Hit {
     @Column(name = "frame", nullable = false)
     private Integer frame;
 
-    // 소수점 초 단위 (예: 1.500) — AI 서버에서 float으로 전송
     @Column(name = "time_sec", nullable = false)
     private Float timeSec;
 
-    // "pink_top" | "green_bottom"
+    // "top" | "bottom"
     @Column(name = "player", nullable = false, length = 20)
     private String player;
 
-    // 스트로크 분류 결과 (null 허용 — 분류기 미설치 시)
     @Column(name = "stroke_type", length = 20)
     private String strokeType;
 
@@ -44,4 +42,12 @@ public class Hit {
 
     @Column(name = "player_y")
     private Float playerY;
+
+    // 타격 시점 셔틀콕의 미니맵 좌표 (0~100, 히트맵 SVG 좌표계와 동일)
+    // AI 서버 pipeline_service.py Step 7.9에서 frame_to_minimap() 후 주입
+    @Column(name = "minimap_x")
+    private Float minimapX;
+
+    @Column(name = "minimap_y")
+    private Float minimapY;
 }
