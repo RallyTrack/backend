@@ -401,7 +401,7 @@ public class AnalysisService {
                 ? (winnerRallies / (double) participatedRallies) * 30.0 : 0.0;
 
         double rawAggression = Math.max(strokeScore, fastShotRate) + winnerBonus;
-        int aggressionScore = clamp((int) Math.round(Math.max(rawAggression, 35.0)));
+        int aggressionScore = clamp((int) Math.round(rawAggression));
 
         // ── ② CONSISTENCY ────────────────────────────────────────
         int participatedCount = (int) participatedRallies;
@@ -445,7 +445,7 @@ public class AnalysisService {
 
         double avgHitsPerRally = playerHitsPerRally.isEmpty() ? 0.0
                 : playerHitsPerRally.stream().mapToLong(Long::longValue).average().orElse(0.0);
-        int rallyScore = clamp((int) Math.round(avgHitsPerRally / 5.0 * 100.0));
+        int rallyScore = clamp((int) Math.round(avgHitsPerRally / 8.0 * 100.0));
 
         // ── ④ MOBILITY ───────────────────────────────────────────
         int mobilityScore = 50;
