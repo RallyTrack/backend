@@ -38,6 +38,7 @@ public class AnalysisService {
         AnalysisResult result = analysisResultRepository.findByVideoVideoId(videoId)
                 .orElseThrow(() -> new ResourceNotFroundException("해당 영상의 분석 결과가 없습니다."));
 
+        // HitDto에 minimap_x/y 포함 → 프론트 히트맵이 미니맵과 동일한 좌표 사용
         List<AnalysisReportResponse.HitDto> hitDtos = result.getHits().stream()
                 .map(h -> AnalysisReportResponse.HitDto.builder()
                         .hitNumber(h.getHitNumber())
@@ -45,6 +46,10 @@ public class AnalysisService {
                         .timeSec(h.getTimeSec())
                         .player(h.getPlayer())
                         .strokeType(h.getStrokeType())
+                        .minimapX(h.getMinimapX())
+                        .minimapY(h.getMinimapY())
+                        .playerX(h.getPlayerX())
+                        .playerY(h.getPlayerY())
                         .build())
                 .collect(Collectors.toList());
 
@@ -80,12 +85,11 @@ public class AnalysisService {
                 .videoId(videoId)
                 .summary(summary)
                 .players(players)
-                // legacy flat fields: 일단 bottom 기준으로 mirror
+                // legacy flat fields
                 .positionAnalysis(bottomReport.getPositionAnalysis())
                 .strokeTypes(bottomReport.getStrokeTypes())
                 .abilityMetrics(bottomReport.getAbilityMetrics())
                 .aiCoaching(bottomReport.getAiCoaching())
-                // 기존 debug/호환 필드
                 .videoFps(result.getVideoFps())
                 .totalHits(result.getTotalHits())
                 .hitsData(hitDtos)
@@ -104,7 +108,6 @@ public class AnalysisService {
 
         ScoreResult score = deriveScore(request.getHitsData(), request.getRallyResults());
 
-        // AnalysisResult 저장
         Float homeReturnRateTop = null;
         Float homeReturnRateBottom = null;
         if (request.getPlayerMetrics() != null) {
@@ -133,7 +136,7 @@ public class AnalysisService {
 
         analysisResultRepository.save(analysisResult);
 
-        // 개별 타점(Hit) 저장
+        // 개별 타점(Hit) 저장 — minimap_x/y 포함
         if (request.getHitsData() != null) {
             for (AnalysisCompleteRequest.HitData hitData : request.getHitsData()) {
                 hitRepository.save(Hit.builder()
@@ -145,11 +148,13 @@ public class AnalysisService {
                         .strokeType(hitData.getStrokeType())
                         .playerX(hitData.getPlayerX())
                         .playerY(hitData.getPlayerY())
+                        .minimapX(hitData.getMinimapX())
+                        .minimapY(hitData.getMinimapY())
                         .build());
             }
         }
 
-        // 타임라인 이벤트 생성 (hits_data 기반)
+        // 타임라인 이벤트 생성
         if (request.getHitsData() != null) {
             for (AnalysisCompleteRequest.HitData hitData : request.getHitsData()) {
                 int ts = hitData.getTimeSec() != null ? hitData.getTimeSec().intValue() : 0;
@@ -169,18 +174,13 @@ public class AnalysisService {
             }
         }
 
-        // Video 업데이트
         video.setVideoStatus("COMPLETED");
         if (video.getDurationSeconds() == null || video.getDurationSeconds() <= 0) {
             video.setDurationSeconds(deriveDurationSeconds(request.getHitsData()));
         }
         video.setMatchScore(score.topPlayerScore + ":" + score.bottomPlayerScore);
-        if (request.getSkeletonVideoUrl() != null) {
-            video.setSkeletonVideoUrl(request.getSkeletonVideoUrl());
-        }
-        if (request.getMinimapVideoUrl() != null) {
-            video.setMinimapVideoUrl(request.getMinimapVideoUrl());
-        }
+        if (request.getSkeletonVideoUrl() != null) video.setSkeletonVideoUrl(request.getSkeletonVideoUrl());
+        if (request.getMinimapVideoUrl() != null)  video.setMinimapVideoUrl(request.getMinimapVideoUrl());
         videoRepository.save(video);
     }
 
@@ -288,9 +288,6 @@ public class AnalysisService {
         return new int[]{topScore, bottomScore, unknownCount};
     }
 
-    /**
-     * 마지막 타점 시간 + 10초를 영상 길이(초)로 추정합니다.
-     */
     private Integer deriveDurationSeconds(List<AnalysisCompleteRequest.HitData> hitsData) {
         if (hitsData == null || hitsData.isEmpty()) return 0;
         AnalysisCompleteRequest.HitData last = hitsData.get(hitsData.size() - 1);
@@ -300,8 +297,8 @@ public class AnalysisService {
     // ── 내부 헬퍼 ────────────────────────────────────────────
 
     private static class ScoreResult {
-        final int topPlayerScore;
-        final int bottomPlayerScore;
+        final int    topPlayerScore;
+        final int    bottomPlayerScore;
         final String matchOutcome;
         final int unknownRallies;
         final int totalRallies;
@@ -370,47 +367,22 @@ public class AnalysisService {
 
     private String normalizePlayer(String player) {
         if (player == null) return "bottom";
-
-        if ("top".equals(player) || "pink_top".equals(player)) {
-            return "top";
-        }
-
-        if ("bottom".equals(player) || "green_bottom".equals(player)) {
-            return "bottom";
-        }
-
+        if ("top".equals(player)    || "pink_top".equals(player))    return "top";
+        if ("bottom".equals(player) || "green_bottom".equals(player)) return "bottom";
         return "bottom";
     }
 
     private String toFrontendOutcome(Integer topPlayerScore, Integer bottomPlayerScore) {
-        int top = topPlayerScore != null ? topPlayerScore : 0;
+        int top    = topPlayerScore    != null ? topPlayerScore    : 0;
         int bottom = bottomPlayerScore != null ? bottomPlayerScore : 0;
-
         if (bottom > top) return "WIN";
         if (bottom < top) return "LOSE";
         return "DRAW";
     }
 
     private String formatDurationSeconds(Integer durationSeconds) {
-        if (durationSeconds == null || durationSeconds <= 0) {
-            return "0:00";
-        }
+        if (durationSeconds == null || durationSeconds <= 0) return "0:00";
         return String.format("%d:%02d", durationSeconds / 60, durationSeconds % 60);
-    }
-
-    private String formatMatchTime(List<Hit> hits) {
-        if (hits == null || hits.isEmpty()) {
-            return "0:00";
-        }
-
-        int seconds = hits.stream()
-                .map(Hit::getTimeSec)
-                .filter(t -> t != null)
-                .mapToInt(Float::intValue)
-                .max()
-                .orElse(0);
-
-        return String.format("%d:%02d", seconds / 60, seconds % 60);
     }
 
     private AbilityMetricsDto calculateAbilityMetrics(
@@ -433,10 +405,6 @@ public class AnalysisService {
         long smashCount  = playerHits.stream().filter(h -> "Smash".equals(h.getStrokeType())).count();
         long driveCount  = playerHits.stream().filter(h -> "Drive".equals(h.getStrokeType())).count();
         long dropCount   = playerHits.stream().filter(h -> "Drop".equals(h.getStrokeType())).count();
-        long othersCount = playerHits.stream().filter(h -> {
-            String s = h.getStrokeType();
-            return s == null || "others".equalsIgnoreCase(s);
-        }).count();
 
         double strokeScore = (smashCount * 3.0 + driveCount * 2.0 + dropCount)
                 / ((double) totalPlayerHits * 3.0) * 100.0;
