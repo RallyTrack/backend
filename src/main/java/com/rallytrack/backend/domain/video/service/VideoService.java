@@ -26,6 +26,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import com.rallytrack.backend.domain.analysis.entity.AnalysisResult;
+import com.rallytrack.backend.domain.analysis.entity.Hit;
 
 @Service
 @RequiredArgsConstructor
@@ -168,10 +170,19 @@ public class VideoService {
                 List<TimelineEvent> events = timelineEventRepository
                                 .findByVideoVideoIdOrderByTimestampAsc(videoId);
 
+                Map<Integer, Float> hitTimeSec = analysisResultRepository.findByVideoVideoId(videoId)
+                                .map(AnalysisResult::getHits)
+                                .orElse(List.of())
+                                .stream()
+                                .collect(Collectors.toMap(Hit::getHitNumber, Hit::getTimeSec, (a, b) -> a));
+
                 List<VideoDetailResponse.TimelineEventDto> eventDtos = events.stream()
                                 .map(e -> VideoDetailResponse.TimelineEventDto.builder()
                                                 .eventId(e.getEventId())
-                                                .timestamp(e.getTimestamp())
+                                                .timestamp(e.getHitNumber() != null
+                                                                ? hitTimeSec.getOrDefault(e.getHitNumber(),
+                                                                                e.getTimestamp().floatValue())
+                                                                : e.getTimestamp().floatValue())
                                                 .displayTime(e.getDisplayTime())
                                                 .type(e.getEventType().name())
                                                 .title(e.getEventTitle())
