@@ -136,15 +136,14 @@ public class AnalysisService {
             for (AnalysisCompleteRequest.HitData hitData : request.getHitsData()) {
                 int ts = hitData.getTimeSec() != null ? hitData.getTimeSec().intValue() : 0;
                 String displayTime = String.format("%d:%02d", ts / 60, ts % 60);
-                String playerLabel = "pink_top".equals(hitData.getPlayer()) ? "상단(핑크)" : "하단(라임)";
-                String strokeLabel = hitData.getStrokeType() != null ? " [" + hitData.getStrokeType() + "]" : "";
+                String strokeLabel = hitData.getStrokeType() != null ? hitData.getStrokeType() : "Unknown";
 
                 timelineEventRepository.save(TimelineEvent.builder()
                         .video(video)
                         .timestamp(ts)
                         .displayTime(displayTime)
                         .eventType(EventType.HIT)
-                        .eventTitle("#" + hitData.getHitNumber() + " " + playerLabel + strokeLabel)
+                        .eventTitle("#" + hitData.getHitNumber() + " " + strokeLabel)
                         .eventDescription(hitData.getPlayer())
                         .hitNumber(hitData.getHitNumber())
                         .player(hitData.getPlayer())
