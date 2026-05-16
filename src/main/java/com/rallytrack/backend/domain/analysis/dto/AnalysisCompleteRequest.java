@@ -5,6 +5,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * AI 서버 → 백엔드 분석 완료 콜백 DTO
@@ -22,6 +23,42 @@ public class AnalysisCompleteRequest {
     private List<HitData> hitsData;
     private String skeletonVideoUrl;
     private String minimapVideoUrl;
+
+    @JsonProperty("rally_results")
+    private List<RallyResultData> rallyResults;
+
+    @JsonProperty("player_metrics")
+    private Map<String, PlayerMetricsData> playerMetrics;
+
+    @Getter
+    @NoArgsConstructor
+    public static class RallyResultData {
+
+        @JsonProperty("rally_idx")
+        private Integer rallyIdx;
+
+        @JsonProperty("last_hit_number")
+        private Integer lastHitNumber;
+
+        @JsonProperty("last_hit_owner")
+        private String lastHitOwner;
+
+        @JsonProperty("result_type")
+        private String resultType;
+
+        @JsonProperty("is_in")
+        private Boolean isIn;
+
+        private String location;
+    }
+
+    @Getter
+    @NoArgsConstructor
+    public static class PlayerMetricsData {
+
+        @JsonProperty("home_return_rate")
+        private Integer homeReturnRate;
+    }
 
     @Getter
     @NoArgsConstructor
