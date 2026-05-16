@@ -3,6 +3,7 @@ package com.rallytrack.backend.domain.analysis.dto;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 import java.util.List;
 import java.util.Map;
@@ -53,11 +54,12 @@ public class AnalysisCompleteRequest {
     }
 
     @Getter
+    @Setter
     @NoArgsConstructor
     public static class PlayerMetricsData {
 
         @JsonProperty("home_return_rate")
-        private Integer homeReturnRate;
+        private Float homeReturnRate;
     }
 
     @Getter

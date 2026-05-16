@@ -57,8 +57,10 @@ public class AnalysisService {
                 .filter(h -> "bottom".equals(normalizePlayer(h.getPlayer())))
                 .count();
 
-        PlayerReportDto topReport = buildPlayerReport(topHitCount, hits, "top", null, null);
-        PlayerReportDto bottomReport = buildPlayerReport(bottomHitCount, hits, "bottom", null, null);
+        Map<String, AnalysisCompleteRequest.PlayerMetricsData> persistedMetrics = buildPersistedMetrics(result);
+
+        PlayerReportDto topReport = buildPlayerReport(topHitCount, hits, "top", null, persistedMetrics);
+        PlayerReportDto bottomReport = buildPlayerReport(bottomHitCount, hits, "bottom", null, persistedMetrics);
 
         PlayersDto players = PlayersDto.builder()
                 .top(topReport)
@@ -104,10 +106,25 @@ public class AnalysisService {
         ScoreResult score = deriveScore(request.getHitsData());
 
         // AnalysisResult 저장
+        Float homeReturnRateTop = null;
+        Float homeReturnRateBottom = null;
+        if (request.getPlayerMetrics() != null) {
+            AnalysisCompleteRequest.PlayerMetricsData pmTop = request.getPlayerMetrics().get("top");
+            if (pmTop == null) pmTop = request.getPlayerMetrics().get("pink_top");
+            if (pmTop != null) homeReturnRateTop = pmTop.getHomeReturnRate();
+
+            AnalysisCompleteRequest.PlayerMetricsData pmBottom = request.getPlayerMetrics().get("bottom");
+            if (pmBottom == null) pmBottom = request.getPlayerMetrics().get("green_bottom");
+            if (pmBottom != null) homeReturnRateBottom = pmBottom.getHomeReturnRate();
+        }
+        System.out.println("[기동력] homeReturnRateTop=" + homeReturnRateTop + ", homeReturnRateBottom=" + homeReturnRateBottom);
+
         AnalysisResult analysisResult = AnalysisResult.builder()
                 .video(video)
                 .videoFps(request.getVideoFps())
                 .totalHits(request.getTotalHits())
+                .homeReturnRateTop(homeReturnRateTop)
+                .homeReturnRateBottom(homeReturnRateBottom)
                 .topPlayerScore(score.topPlayerScore)
                 .bottomPlayerScore(score.bottomPlayerScore)
                 .matchOutcome(score.matchOutcome)
@@ -447,11 +464,12 @@ public class AnalysisService {
         int rallyScore = clamp((int) Math.round(avgHitsPerRally / 8.0 * 100.0));
 
         // ── ④ MOBILITY ───────────────────────────────────────────
+        // AI 서버가 0.0~1.0 비율로 전송 → ×100 해서 0~100 점수로 변환
         int mobilityScore = 50;
         if (playerMetrics != null) {
             AnalysisCompleteRequest.PlayerMetricsData pm = playerMetrics.get(playerSide);
             if (pm != null && pm.getHomeReturnRate() != null) {
-                mobilityScore = clamp(pm.getHomeReturnRate());
+                mobilityScore = clamp(Math.round(pm.getHomeReturnRate() * 100));
             }
         }
 
@@ -539,6 +557,21 @@ public class AnalysisService {
         }
         rallies.add(current);
         return rallies;
+    }
+
+    private Map<String, AnalysisCompleteRequest.PlayerMetricsData> buildPersistedMetrics(AnalysisResult result) {
+        Map<String, AnalysisCompleteRequest.PlayerMetricsData> map = new java.util.HashMap<>();
+        if (result.getHomeReturnRateTop() != null) {
+            AnalysisCompleteRequest.PlayerMetricsData pm = new AnalysisCompleteRequest.PlayerMetricsData();
+            pm.setHomeReturnRate(result.getHomeReturnRateTop());
+            map.put("top", pm);
+        }
+        if (result.getHomeReturnRateBottom() != null) {
+            AnalysisCompleteRequest.PlayerMetricsData pm = new AnalysisCompleteRequest.PlayerMetricsData();
+            pm.setHomeReturnRate(result.getHomeReturnRateBottom());
+            map.put("bottom", pm);
+        }
+        return map.isEmpty() ? null : map;
     }
 
     /** 값을 0~100 범위로 클램프. */
