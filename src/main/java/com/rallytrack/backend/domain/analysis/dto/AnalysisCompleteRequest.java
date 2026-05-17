@@ -25,7 +25,7 @@ public class AnalysisCompleteRequest {
     private String skeletonVideoUrl;
     private String minimapVideoUrl;
 
-    @JsonProperty("rally_results")
+    @JsonProperty("rallyResults")
     private List<RallyResultData> rallyResults;
 
     @JsonProperty("player_metrics")
@@ -35,22 +35,27 @@ public class AnalysisCompleteRequest {
     @NoArgsConstructor
     public static class RallyResultData {
 
-        @JsonProperty("rally_idx")
+        @JsonProperty("rallyIdx")
         private Integer rallyIdx;
 
-        @JsonProperty("last_hit_number")
+        @JsonProperty("lastHitNumber")
         private Integer lastHitNumber;
 
-        @JsonProperty("last_hit_owner")
+        @JsonProperty("lastHitOwner")
         private String lastHitOwner;
 
-        @JsonProperty("result_type")
+        @JsonProperty("resultType")
         private String resultType;
 
-        @JsonProperty("is_in")
+        @JsonProperty("isIn")
         private Boolean isIn;
 
         private String location;
+
+        @JsonProperty("marginCm")
+        private Float marginCm;
+
+        private String confidence;
     }
 
     @Getter

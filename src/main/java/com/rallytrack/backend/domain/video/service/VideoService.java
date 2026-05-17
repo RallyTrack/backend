@@ -200,6 +200,23 @@ public class VideoService {
                                 ? s3Service.generatePresignedUrl(video.getMinimapVideoUrl())
                                 : null;
 
+                VideoDetailResponse.MatchSummary matchSummary;
+                java.util.Optional<AnalysisResult> arOpt = analysisResultRepository.findByVideoVideoId(videoId);
+                if (arOpt.isPresent()) {
+                        AnalysisResult ar = arOpt.get();
+                        matchSummary = VideoDetailResponse.MatchSummary.builder()
+                                        .matchScore(video.getMatchScore())
+                                        .unknownRallies(ar.getUnknownRallies() != null ? ar.getUnknownRallies() : 0)
+                                        .totalRallies(ar.getTotalRallies() != null ? ar.getTotalRallies() : 0)
+                                        .build();
+                } else {
+                        matchSummary = VideoDetailResponse.MatchSummary.builder()
+                                        .matchScore(video.getMatchScore())
+                                        .unknownRallies(0)
+                                        .totalRallies(0)
+                                        .build();
+                }
+
                 return VideoDetailResponse.builder()
                                 .videoInfo(VideoDetailResponse.VideoInfo.builder()
                                                 .videoId(video.getVideoId())
@@ -210,11 +227,36 @@ public class VideoService {
                                                 .thumbnailUrl(video.getThumbnailUrl())
                                                 .durationSeconds(video.getDurationSeconds())
                                                 .build())
-                                .matchSummary(VideoDetailResponse.MatchSummary.builder()
-                                                .matchScore(video.getMatchScore())
-                                                .build())
+                                .matchSummary(matchSummary)
                                 .timelineEvents(eventDtos)
                                 .build();
+        }
+
+        // ── 점수 수동 수정 ───────────────────────────────────────
+
+        @Transactional
+        public void updateMatchScore(Long userId, Long videoId, Integer topScore, Integer bottomScore) {
+                Video video = videoRepository.findById(videoId)
+                                .orElseThrow(() -> new IllegalArgumentException("영상을 찾을 수 없습니다."));
+
+                if (!video.getUser().getId().equals(userId)) {
+                        throw new IllegalArgumentException("수정 권한이 없습니다.");
+                }
+
+                int top = topScore != null ? Math.max(0, Math.min(topScore, 30)) : 0;
+                int bottom = bottomScore != null ? Math.max(0, Math.min(bottomScore, 30)) : 0;
+
+                video.setMatchScore(top + ":" + bottom);
+                videoRepository.save(video);
+
+                analysisResultRepository.findByVideoVideoId(videoId).ifPresent(ar -> {
+                        ar.setTopPlayerScore(top);
+                        ar.setBottomPlayerScore(bottom);
+                        String outcome = top > bottom ? "TOP_WIN" : top < bottom ? "BOTTOM_WIN" : "DRAW";
+                        ar.setMatchOutcome(outcome);
+                        ar.setUnknownRallies(0);
+                        analysisResultRepository.save(ar);
+                });
         }
 
         // ── 영상 삭제 ────────────────────────────────────────────
