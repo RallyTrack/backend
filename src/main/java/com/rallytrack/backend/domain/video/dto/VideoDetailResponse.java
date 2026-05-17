@@ -34,6 +34,8 @@ public class VideoDetailResponse {
     @AllArgsConstructor
     public static class MatchSummary {
         private String matchScore;
+        private Integer unknownRallies;
+        private Integer totalRallies;
     }
 
     @Getter
@@ -41,7 +43,7 @@ public class VideoDetailResponse {
     @AllArgsConstructor
     public static class TimelineEventDto {
         private Long eventId;
-        private Integer timestamp;
+        private Float timestamp;
         private String displayTime;
         private String type;       // EventType enum의 name() 값
         private String title;
