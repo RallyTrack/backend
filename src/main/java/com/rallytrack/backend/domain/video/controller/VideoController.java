@@ -43,7 +43,7 @@ public class VideoController {
                             example = "amateur"
                     )
             )
-            @RequestParam(value = "mode", required = false, defaultValue = "amateur") String mode) {
+            @RequestParam(value = "mode", required = false, defaultValue = "pro") String mode) {
         Long userId = (Long) httpRequest.getAttribute("userId");
 
         if (title == null || title.isBlank()) {

@@ -291,6 +291,6 @@ public class VideoService {
         }
 
         private String normalizeAnalysisMode(String mode) {
-                return "pro".equalsIgnoreCase(mode != null ? mode.trim() : "") ? "pro" : "amateur";
+                return "amateur".equalsIgnoreCase(mode != null ? mode.trim() : "") ? "amateur" : "pro";
         }
 }
