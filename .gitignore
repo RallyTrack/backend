@@ -32,6 +32,7 @@ out/
 .history/
 *.code-workspace
 
-# Secrets (나중에 비밀번호 숨길 때 사용)
-# application.yml
-# application-secret.yml
+# Secrets
+application.yml
+application-secret.yml
+src/main/resources/application-secret.yml
