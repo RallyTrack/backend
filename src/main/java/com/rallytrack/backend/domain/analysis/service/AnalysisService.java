@@ -269,11 +269,15 @@ public class AnalysisService {
             Map<Integer, AnalysisCompleteRequest.RallyResultData> rrMap,
             int topScore, int bottomScore, int unknownCount) {
 
-        boolean isPinkTop = "pink_top".equals(lastHit.getPlayer());
         AnalysisCompleteRequest.RallyResultData rr =
                 (lastHit.getHitNumber() != null) ? rrMap.get(lastHit.getHitNumber()) : null;
 
         String resultType = (rr != null) ? rr.getResultType() : null;
+
+        // AI 서버의 lastHitOwner를 우선 사용 (hitsData.player보다 정확)
+        String lastPlayer = (rr != null && rr.getLastHitOwner() != null)
+                ? rr.getLastHitOwner() : lastHit.getPlayer();
+        boolean isPinkTop = "pink_top".equals(lastPlayer);
 
         if ("WINNER".equals(resultType)) {
             if (isPinkTop) topScore++;
