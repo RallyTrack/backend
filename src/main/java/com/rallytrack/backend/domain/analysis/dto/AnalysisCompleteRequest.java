@@ -3,8 +3,10 @@ package com.rallytrack.backend.domain.analysis.dto;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * AI 서버 → 백엔드 분석 완료 콜백 DTO
@@ -22,6 +24,48 @@ public class AnalysisCompleteRequest {
     private List<HitData> hitsData;
     private String skeletonVideoUrl;
     private String minimapVideoUrl;
+
+    @JsonProperty("rallyResults")
+    private List<RallyResultData> rallyResults;
+
+    @JsonProperty("player_metrics")
+    private Map<String, PlayerMetricsData> playerMetrics;
+
+    @Getter
+    @NoArgsConstructor
+    public static class RallyResultData {
+
+        @JsonProperty("rallyIdx")
+        private Integer rallyIdx;
+
+        @JsonProperty("lastHitNumber")
+        private Integer lastHitNumber;
+
+        @JsonProperty("lastHitOwner")
+        private String lastHitOwner;
+
+        @JsonProperty("resultType")
+        private String resultType;
+
+        @JsonProperty("isIn")
+        private Boolean isIn;
+
+        private String location;
+
+        @JsonProperty("marginCm")
+        private Float marginCm;
+
+        private String confidence;
+    }
+
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    public static class PlayerMetricsData {
+
+        @JsonProperty("home_return_rate")
+        private Float homeReturnRate;
+    }
 
     @Getter
     @NoArgsConstructor

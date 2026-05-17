@@ -1,18 +1,14 @@
 package com.rallytrack.backend.domain.analysis.dto;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
-import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 
 @Getter
 @Builder
-@AllArgsConstructor
 public class AbilityMetricsDto {
-    private Integer smash;
-    @JsonProperty("AvgRallyTime")
-    private Integer avgRallyTime;
-    private Integer speed;
-    private Integer distance;
-    private Integer errorRate;
+    private int aggression;    // 0-100
+    private int rally;         // 0-100
+    private int defense;       // 0-100
+    private int mobility;      // 0-100
+    private int consistency;   // 0-100
 }

@@ -39,6 +39,13 @@ public class AnalysisResult {
     @Builder.Default
     private List<Hit> hits = new ArrayList<>();
 
+    // AI 서버 player_metrics 기반 홈 복귀율
+    @Column(name = "home_return_rate_top")
+    private Float homeReturnRateTop;
+
+    @Column(name = "home_return_rate_bottom")
+    private Float homeReturnRateBottom;
+
     // hits_data 기반 파생 점수 (코트 상단/하단 기준)
     @Column(name = "top_player_score")
     private Integer topPlayerScore;
@@ -49,6 +56,12 @@ public class AnalysisResult {
     // "TOP_WIN" | "BOTTOM_WIN" | "DRAW"
     @Column(name = "match_outcome")
     private String matchOutcome;
+
+    @Column(name = "unknown_rallies")
+    private Integer unknownRallies;
+
+    @Column(name = "total_rallies")
+    private Integer totalRallies;
 
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)

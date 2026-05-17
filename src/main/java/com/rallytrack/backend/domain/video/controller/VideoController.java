@@ -9,6 +9,8 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -69,6 +71,18 @@ public class VideoController {
         return ResponseEntity.ok(ApiResponse.success("성공", response));
     }
 
+    @Operation(summary = "점수 수동 수정", description = "사용자가 매치 스코어를 직접 수정합니다.")
+    @PatchMapping("/{videoId}/score")
+    public ResponseEntity<ApiResponse<Void>> updateScore(
+            HttpServletRequest httpRequest,
+            @PathVariable("videoId") Long videoId,
+            @RequestBody ScoreUpdateRequest request) {
+
+        Long userId = (Long) httpRequest.getAttribute("userId");
+        videoService.updateMatchScore(userId, videoId, request.getTopScore(), request.getBottomScore());
+        return ResponseEntity.ok(ApiResponse.success("점수가 수정되었습니다.", null));
+    }
+
     @Operation(summary = "영상 삭제", description = "영상을 소프트 삭제합니다. 연관된 분석 결과와 타임라인 이벤트도 함께 삭제됩니다.")
     @DeleteMapping("/{videoId}")
     public ResponseEntity<ApiResponse<Void>> deleteVideo(
@@ -79,4 +93,11 @@ public class VideoController {
         videoService.deleteVideo(userId, videoId);
         return ResponseEntity.ok(ApiResponse.success("영상이 삭제되었습니다.", null));
     }
+}
+
+@Getter
+@NoArgsConstructor
+class ScoreUpdateRequest {
+    private Integer topScore;
+    private Integer bottomScore;
 }

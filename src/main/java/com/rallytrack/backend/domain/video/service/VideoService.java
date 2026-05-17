@@ -26,6 +26,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import com.rallytrack.backend.domain.analysis.entity.AnalysisResult;
+import com.rallytrack.backend.domain.analysis.entity.Hit;
 
 @Service
 @RequiredArgsConstructor
@@ -168,10 +170,19 @@ public class VideoService {
                 List<TimelineEvent> events = timelineEventRepository
                                 .findByVideoVideoIdOrderByTimestampAsc(videoId);
 
+                Map<Integer, Float> hitTimeSec = analysisResultRepository.findByVideoVideoId(videoId)
+                                .map(AnalysisResult::getHits)
+                                .orElse(List.of())
+                                .stream()
+                                .collect(Collectors.toMap(Hit::getHitNumber, Hit::getTimeSec, (a, b) -> a));
+
                 List<VideoDetailResponse.TimelineEventDto> eventDtos = events.stream()
                                 .map(e -> VideoDetailResponse.TimelineEventDto.builder()
                                                 .eventId(e.getEventId())
-                                                .timestamp(e.getTimestamp())
+                                                .timestamp(e.getHitNumber() != null
+                                                                ? hitTimeSec.getOrDefault(e.getHitNumber(),
+                                                                                e.getTimestamp().floatValue())
+                                                                : e.getTimestamp().floatValue())
                                                 .displayTime(e.getDisplayTime())
                                                 .type(e.getEventType().name())
                                                 .title(e.getEventTitle())
@@ -189,6 +200,23 @@ public class VideoService {
                                 ? s3Service.generatePresignedUrl(video.getMinimapVideoUrl())
                                 : null;
 
+                VideoDetailResponse.MatchSummary matchSummary;
+                java.util.Optional<AnalysisResult> arOpt = analysisResultRepository.findByVideoVideoId(videoId);
+                if (arOpt.isPresent()) {
+                        AnalysisResult ar = arOpt.get();
+                        matchSummary = VideoDetailResponse.MatchSummary.builder()
+                                        .matchScore(video.getMatchScore())
+                                        .unknownRallies(ar.getUnknownRallies() != null ? ar.getUnknownRallies() : 0)
+                                        .totalRallies(ar.getTotalRallies() != null ? ar.getTotalRallies() : 0)
+                                        .build();
+                } else {
+                        matchSummary = VideoDetailResponse.MatchSummary.builder()
+                                        .matchScore(video.getMatchScore())
+                                        .unknownRallies(0)
+                                        .totalRallies(0)
+                                        .build();
+                }
+
                 return VideoDetailResponse.builder()
                                 .videoInfo(VideoDetailResponse.VideoInfo.builder()
                                                 .videoId(video.getVideoId())
@@ -199,11 +227,36 @@ public class VideoService {
                                                 .thumbnailUrl(video.getThumbnailUrl())
                                                 .durationSeconds(video.getDurationSeconds())
                                                 .build())
-                                .matchSummary(VideoDetailResponse.MatchSummary.builder()
-                                                .matchScore(video.getMatchScore())
-                                                .build())
+                                .matchSummary(matchSummary)
                                 .timelineEvents(eventDtos)
                                 .build();
+        }
+
+        // ── 점수 수동 수정 ───────────────────────────────────────
+
+        @Transactional
+        public void updateMatchScore(Long userId, Long videoId, Integer topScore, Integer bottomScore) {
+                Video video = videoRepository.findById(videoId)
+                                .orElseThrow(() -> new IllegalArgumentException("영상을 찾을 수 없습니다."));
+
+                if (!video.getUser().getId().equals(userId)) {
+                        throw new IllegalArgumentException("수정 권한이 없습니다.");
+                }
+
+                int top = topScore != null ? Math.max(0, Math.min(topScore, 30)) : 0;
+                int bottom = bottomScore != null ? Math.max(0, Math.min(bottomScore, 30)) : 0;
+
+                video.setMatchScore(top + ":" + bottom);
+                videoRepository.save(video);
+
+                analysisResultRepository.findByVideoVideoId(videoId).ifPresent(ar -> {
+                        ar.setTopPlayerScore(top);
+                        ar.setBottomPlayerScore(bottom);
+                        String outcome = top > bottom ? "TOP_WIN" : top < bottom ? "BOTTOM_WIN" : "DRAW";
+                        ar.setMatchOutcome(outcome);
+                        ar.setUnknownRallies(0);
+                        analysisResultRepository.save(ar);
+                });
         }
 
         // ── 영상 삭제 ────────────────────────────────────────────

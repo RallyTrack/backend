@@ -17,7 +17,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -56,8 +58,10 @@ public class AnalysisService {
                 .filter(h -> "bottom".equals(normalizePlayer(h.getPlayer())))
                 .count();
 
-        PlayerReportDto topReport = buildPlayerReport(topHitCount, hits, "top");
-        PlayerReportDto bottomReport = buildPlayerReport(bottomHitCount, hits, "bottom");
+        Map<String, AnalysisCompleteRequest.PlayerMetricsData> persistedMetrics = buildPersistedMetrics(result);
+
+        PlayerReportDto topReport = buildPlayerReport(topHitCount, hits, "top", null, persistedMetrics);
+        PlayerReportDto bottomReport = buildPlayerReport(bottomHitCount, hits, "bottom", null, persistedMetrics);
 
         PlayersDto players = PlayersDto.builder()
                 .top(topReport)
@@ -98,18 +102,33 @@ public class AnalysisService {
         Video video = videoRepository.findById(request.getVideoId())
                 .orElseThrow(() -> new IllegalArgumentException("영상을 찾을 수 없습니다."));
 
-        // hits_data 기반 점수 파생 계산
-        // TODO: 배드민턴 규칙에 맞게 정교화 필요 (현재는 랠리 마지막 타격자 기준 단순 추정)
-        ScoreResult score = deriveScore(request.getHitsData());
+        ScoreResult score = deriveScore(request.getHitsData(), request.getRallyResults());
 
         // AnalysisResult 저장
+        Float homeReturnRateTop = null;
+        Float homeReturnRateBottom = null;
+        if (request.getPlayerMetrics() != null) {
+            AnalysisCompleteRequest.PlayerMetricsData pmTop = request.getPlayerMetrics().get("top");
+            if (pmTop == null) pmTop = request.getPlayerMetrics().get("pink_top");
+            if (pmTop != null) homeReturnRateTop = pmTop.getHomeReturnRate();
+
+            AnalysisCompleteRequest.PlayerMetricsData pmBottom = request.getPlayerMetrics().get("bottom");
+            if (pmBottom == null) pmBottom = request.getPlayerMetrics().get("green_bottom");
+            if (pmBottom != null) homeReturnRateBottom = pmBottom.getHomeReturnRate();
+        }
+        System.out.println("[기동력] homeReturnRateTop=" + homeReturnRateTop + ", homeReturnRateBottom=" + homeReturnRateBottom);
+
         AnalysisResult analysisResult = AnalysisResult.builder()
                 .video(video)
                 .videoFps(request.getVideoFps())
                 .totalHits(request.getTotalHits())
+                .homeReturnRateTop(homeReturnRateTop)
+                .homeReturnRateBottom(homeReturnRateBottom)
                 .topPlayerScore(score.topPlayerScore)
                 .bottomPlayerScore(score.bottomPlayerScore)
                 .matchOutcome(score.matchOutcome)
+                .unknownRallies(score.unknownRallies)
+                .totalRallies(score.totalRallies)
                 .build();
 
         analysisResultRepository.save(analysisResult);
@@ -135,15 +154,14 @@ public class AnalysisService {
             for (AnalysisCompleteRequest.HitData hitData : request.getHitsData()) {
                 int ts = hitData.getTimeSec() != null ? hitData.getTimeSec().intValue() : 0;
                 String displayTime = String.format("%d:%02d", ts / 60, ts % 60);
-                String playerLabel = "pink_top".equals(hitData.getPlayer()) ? "상단(핑크)" : "하단(라임)";
-                String strokeLabel = hitData.getStrokeType() != null ? " [" + hitData.getStrokeType() + "]" : "";
+                String strokeLabel = hitData.getStrokeType() != null ? hitData.getStrokeType() : "Unknown";
 
                 timelineEventRepository.save(TimelineEvent.builder()
                         .video(video)
                         .timestamp(ts)
                         .displayTime(displayTime)
                         .eventType(EventType.HIT)
-                        .eventTitle("#" + hitData.getHitNumber() + " " + playerLabel + strokeLabel)
+                        .eventTitle("#" + hitData.getHitNumber() + " " + strokeLabel)
                         .eventDescription(hitData.getPlayer())
                         .hitNumber(hitData.getHitNumber())
                         .player(hitData.getPlayer())
@@ -169,61 +187,105 @@ public class AnalysisService {
     // ── 점수 파생 계산 ────────────────────────────────────────
 
     /**
-     * hits_data의 랠리 구조에서 코트 상단/하단 점수를 추정합니다.
+     * hits_data + rally_results 기반 점수 계산.
      *
-     * 배드민턴 기본 규칙: 마지막으로 타격한 선수가 실점 (상대 득점).
-     * 랠리 구분: 타점 간격이 3초 이상 벌어지면 새 랠리로 분리.
-     *
-     * 예) A→B→A 순서로 타격 후 A가 마지막 → B 득점 (topPlayer 기준)
-     *
-     * TODO: 실제 배드민턴 규칙(서브권, 코트 in/out 판정 등)에 맞게 정교화 필요
+     * WINNER          → 마지막 타격자 득점 (인바운드 확인)
+     * CONFIRMED_ERROR → 상대 득점 (아웃 확인)
+     * UNKNOWN / 없음  → 점수 미반영, unknownRallies 카운트
      */
-    private ScoreResult deriveScore(List<AnalysisCompleteRequest.HitData> hitsData) {
+    private ScoreResult deriveScore(
+            List<AnalysisCompleteRequest.HitData> hitsData,
+            List<AnalysisCompleteRequest.RallyResultData> rallyResults) {
+
         if (hitsData == null || hitsData.isEmpty()) {
-            return new ScoreResult(0, 0, "DRAW");
+            return new ScoreResult(0, 0, "DRAW", 0, 0);
         }
 
-        int topScore    = 0; // pink_top 득점
-        int bottomScore = 0; // green_bottom 득점
+        Map<Integer, AnalysisCompleteRequest.RallyResultData> rrMap = new HashMap<>();
+        if (rallyResults != null) {
+            for (AnalysisCompleteRequest.RallyResultData rr : rallyResults) {
+                if (rr.getLastHitNumber() != null) {
+                    rrMap.put(rr.getLastHitNumber(), rr);
+                }
+            }
+        }
+
+        int topScore     = 0;
+        int bottomScore  = 0;
+        int unknownCount = 0;
+        int totalRallies = 0;
 
         AnalysisCompleteRequest.HitData lastInRally = hitsData.get(0);
         AnalysisCompleteRequest.HitData prev        = hitsData.get(0);
 
         for (int i = 1; i < hitsData.size(); i++) {
             AnalysisCompleteRequest.HitData hit = hitsData.get(i);
-
             boolean isNewRally = hit.getTimeSec() != null
                     && prev.getTimeSec() != null
                     && (hit.getTimeSec() - prev.getTimeSec()) > 3.0f;
 
             if (isNewRally) {
-                // 이전 랠리 종료: 마지막 타격자가 실점 → 상대 득점
-                if ("pink_top".equals(lastInRally.getPlayer())) {
-                    bottomScore++;
-                } else {
-                    topScore++;
-                }
+                int[] res = applyRallyScore(lastInRally, rrMap, topScore, bottomScore, unknownCount);
+                topScore     = res[0];
+                bottomScore  = res[1];
+                unknownCount = res[2];
+                totalRallies++;
             }
 
             lastInRally = hit;
-            prev = hit;
+            prev        = hit;
         }
 
-        // 마지막 랠리 처리
-        if ("pink_top".equals(lastInRally.getPlayer())) {
-            bottomScore++;
-        } else {
-            topScore++;
-        }
+        int[] res = applyRallyScore(lastInRally, rrMap, topScore, bottomScore, unknownCount);
+        topScore     = res[0];
+        bottomScore  = res[1];
+        unknownCount = res[2];
+        totalRallies++;
 
-        topScore    = Math.min(topScore, 21);
-        bottomScore = Math.min(bottomScore, 21);
+        topScore    = Math.min(topScore, 30);
+        bottomScore = Math.min(bottomScore, 30);
 
         String outcome = topScore > bottomScore ? "TOP_WIN"
                        : topScore < bottomScore ? "BOTTOM_WIN"
                        : "DRAW";
 
-        return new ScoreResult(topScore, bottomScore, outcome);
+        System.out.printf("[점수계산] top=%d bottom=%d unknown=%d/%d%n",
+                topScore, bottomScore, unknownCount, totalRallies);
+
+        return new ScoreResult(topScore, bottomScore, outcome, unknownCount, totalRallies);
+    }
+
+    /**
+     * 랠리 1개 득점 결정.
+     *
+     * WINNER          → 마지막 타격자 득점
+     * CONFIRMED_ERROR → 상대 득점
+     * UNKNOWN / null  → 점수 미반영
+     *
+     * @return [topScore, bottomScore, unknownCount]
+     */
+    private int[] applyRallyScore(
+            AnalysisCompleteRequest.HitData lastHit,
+            Map<Integer, AnalysisCompleteRequest.RallyResultData> rrMap,
+            int topScore, int bottomScore, int unknownCount) {
+
+        boolean isPinkTop = "pink_top".equals(lastHit.getPlayer());
+        AnalysisCompleteRequest.RallyResultData rr =
+                (lastHit.getHitNumber() != null) ? rrMap.get(lastHit.getHitNumber()) : null;
+
+        String resultType = (rr != null) ? rr.getResultType() : null;
+
+        if ("WINNER".equals(resultType)) {
+            if (isPinkTop) topScore++;
+            else           bottomScore++;
+        } else if ("CONFIRMED_ERROR".equals(resultType)) {
+            if (isPinkTop) bottomScore++;
+            else           topScore++;
+        } else {
+            unknownCount++;
+        }
+
+        return new int[]{topScore, bottomScore, unknownCount};
     }
 
     /**
@@ -241,15 +303,23 @@ public class AnalysisService {
         final int topPlayerScore;
         final int bottomPlayerScore;
         final String matchOutcome;
+        final int unknownRallies;
+        final int totalRallies;
 
-        ScoreResult(int topPlayerScore, int bottomPlayerScore, String matchOutcome) {
+        ScoreResult(int topPlayerScore, int bottomPlayerScore,
+                    String matchOutcome, int unknownRallies, int totalRallies) {
             this.topPlayerScore    = topPlayerScore;
             this.bottomPlayerScore = bottomPlayerScore;
             this.matchOutcome      = matchOutcome;
+            this.unknownRallies    = unknownRallies;
+            this.totalRallies      = totalRallies;
         }
     }
 
-    private PlayerReportDto buildPlayerReport(int hitCount, List<Hit> allHits, String playerSide) {
+    private PlayerReportDto buildPlayerReport(
+            int hitCount, List<Hit> allHits, String playerSide,
+            List<AnalysisCompleteRequest.RallyResultData> rallyResults,
+            Map<String, AnalysisCompleteRequest.PlayerMetricsData> playerMetrics) {
         List<Hit> playerHits = allHits.stream()
                 .filter(h -> playerSide.equals(normalizePlayer(h.getPlayer())))
                 .collect(Collectors.toList());
@@ -270,7 +340,13 @@ public class AnalysisService {
                 .sorted(Comparator.comparing(Hit::getTimeSec))
                 .collect(Collectors.toList());
 
-        AbilityMetricsDto abilityMetrics = calculateAbilityMetrics(allHitsSorted, playerHits, playerSide);
+        AbilityMetricsDto abilityMetrics = calculateAbilityMetrics(
+                allHitsSorted,
+                playerHits,
+                playerSide,
+                rallyResults,
+                playerMetrics
+        );
 
         return PlayerReportDto.builder()
                 .positionAnalysis(PositionAnalysisDto.builder()
@@ -337,111 +413,176 @@ public class AnalysisService {
         return String.format("%d:%02d", seconds / 60, seconds % 60);
     }
 
-    /**
-     * Hit 데이터(timeSec, player, strokeType, playerX/Y)로 5개 능력치(0~100)를 산출.
-     *
-     * ① 스매시      : smash 타격 비율 × 2.5          (40% rate → 100)
-     * ② 평균 랠리 시간 : 참여 랠리 평균 지속초 / 30s × 100   (30초 → 100)
-     * ③ 속도        : (10 - 평균타격간격초) / 8 × 100    (2초 간격 → 100)
-     * ④ 이동 거리   : playerX/Y 있으면 실측 이동량, 없으면 랠리 참여율로 근사
-     * ⑤ 실책률      : 랠리 마지막 타격자 비율            (낮을수록 실책 적음)
-     */
     private AbilityMetricsDto calculateAbilityMetrics(
             List<Hit> allHitsSorted,
             List<Hit> playerHits,
-            String playerSide
+            String playerSide,
+            List<AnalysisCompleteRequest.RallyResultData> rallyResults,
+            Map<String, AnalysisCompleteRequest.PlayerMetricsData> playerMetrics
     ) {
         if (playerHits.isEmpty() || allHitsSorted.isEmpty()) {
             return AbilityMetricsDto.builder()
-                    .smash(0).avgRallyTime(0).speed(0).distance(0).errorRate(0)
+                    .aggression(0).consistency(0).rally(0).mobility(0).defense(0)
                     .build();
         }
 
-        int totalPlayerHits = playerHits.size();
-
-        // 전체 경기 활성 시간 (최소 1초)
-        float matchDurationSec =
-                allHitsSorted.get(allHitsSorted.size() - 1).getTimeSec()
-                - allHitsSorted.get(0).getTimeSec();
-        if (matchDurationSec < 1f) matchDurationSec = 1f;
-
-        // 랠리 분리 (3초 이상 공백 = 새 랠리)
         List<List<Hit>> rallies = splitIntoRallies(allHitsSorted, 3.0f);
+        int totalPlayerHits     = playerHits.size();
 
-        // ① 스매시 — smash 비율 × 2.5 (40% rate = 100점)
-        long smashCount = playerHits.stream()
-                .filter(h -> "Smash".equals(h.getStrokeType()))
-                .count();
-        int smashScore = clamp((int) Math.round(smashCount * 100.0 / totalPlayerHits * 2.5));
+        // ── ① AGGRESSION ─────────────────────────────────────────
+        long smashCount  = playerHits.stream().filter(h -> "Smash".equals(h.getStrokeType())).count();
+        long driveCount  = playerHits.stream().filter(h -> "Drive".equals(h.getStrokeType())).count();
+        long dropCount   = playerHits.stream().filter(h -> "Drop".equals(h.getStrokeType())).count();
+        long othersCount = playerHits.stream().filter(h -> {
+            String s = h.getStrokeType();
+            return s == null || "others".equalsIgnoreCase(s);
+        }).count();
 
-        // ② 평균 랠리 시간 — 이 플레이어가 참여한 랠리의 평균 지속 초 / 30s × 100
-        double avgRallyDuration = rallies.stream()
-                .filter(r -> r.size() >= 2 &&
-                        r.stream().anyMatch(h -> playerSide.equals(normalizePlayer(h.getPlayer()))))
-                .mapToDouble(r -> (double)(
-                        r.get(r.size() - 1).getTimeSec() - r.get(0).getTimeSec()))
-                .average()
-                .orElse(0.0);
-        int avgRallyTimeScore = clamp((int) Math.round(avgRallyDuration / 30.0 * 100));
+        double strokeScore = (smashCount * 3.0 + driveCount * 2.0 + dropCount)
+                / ((double) totalPlayerHits * 3.0) * 100.0;
 
-        // ③ 속도 — 경기 시간 ÷ 타격 수 = 평균 타격 간격 / 2초→100, 10초→0
-        double avgInterval = matchDurationSec / (double) totalPlayerHits;
-        int speedScore = clamp((int) Math.round((10.0 - avgInterval) / 8.0 * 100));
-
-        // ④ 이동 거리
-        List<Hit> sortedPlayerHits = playerHits.stream()
-                .filter(h -> h.getTimeSec() != null)
-                .sorted(Comparator.comparing(Hit::getTimeSec))
-                .collect(Collectors.toList());
-
-        boolean hasPosData = sortedPlayerHits.stream()
-                .anyMatch(h -> h.getPlayerX() != null && h.getPlayerY() != null);
-
-        int distanceScore;
-        if (hasPosData) {
-            // 실측: 연속 타격 간 유클리드 거리 합산 (0~1 좌표계)
-            // 기준값: 30타 × 평균이동 0.2 = 6.0 → 100점
-            double totalDist = 0.0;
-            Hit prev = null;
-            for (Hit h : sortedPlayerHits) {
-                if (h.getPlayerX() == null || h.getPlayerY() == null) { prev = null; continue; }
-                if (prev != null && prev.getPlayerX() != null) {
-                    double dx = h.getPlayerX() - prev.getPlayerX();
-                    double dy = h.getPlayerY() - prev.getPlayerY();
-                    totalDist += Math.sqrt(dx * dx + dy * dy);
-                }
-                prev = h;
+        List<Float> pressureTimes = new ArrayList<>();
+        for (int i = 0; i < allHitsSorted.size() - 1; i++) {
+            Hit curr = allHitsSorted.get(i);
+            Hit next = allHitsSorted.get(i + 1);
+            if (playerSide.equals(normalizePlayer(curr.getPlayer()))
+                    && !playerSide.equals(normalizePlayer(next.getPlayer()))
+                    && curr.getTimeSec() != null && next.getTimeSec() != null) {
+                pressureTimes.add(next.getTimeSec() - curr.getTimeSec());
             }
-            distanceScore = clamp((int) Math.round(totalDist / 6.0 * 100));
-        } else {
-            // 위치 없음 → 랠리 참여율로 근사 (95% 참여 = 100점)
-            long ralliesParticipated = rallies.stream()
-                    .filter(r -> r.stream()
-                            .anyMatch(h -> playerSide.equals(normalizePlayer(h.getPlayer()))))
-                    .count();
-            distanceScore = clamp((int) Math.round(
-                    ralliesParticipated * 100.0 / Math.max(1, rallies.size()) * (100.0 / 95.0)));
+        }
+        double fastShotRate = pressureTimes.isEmpty() ? 0.0
+                : pressureTimes.stream().filter(t -> t < 1.2f).count()
+                  / (double) pressureTimes.size() * 100.0;
+
+        long winnerRallies = rallyResults == null ? 0L
+                : rallyResults.stream()
+                  .filter(r -> playerSide.equals(normalizePlayer(r.getLastHitOwner()))
+                               && "WINNER".equals(r.getResultType()))
+                  .count();
+        long participatedRallies = rallies.stream()
+                .filter(r -> r.stream().anyMatch(h -> playerSide.equals(normalizePlayer(h.getPlayer()))))
+                .count();
+        double winnerBonus = participatedRallies > 0
+                ? (winnerRallies / (double) participatedRallies) * 30.0 : 0.0;
+
+        double rawAggression = Math.max(strokeScore, fastShotRate) + winnerBonus;
+        int aggressionScore = clamp((int) Math.round(rawAggression));
+
+        // ── ② CONSISTENCY ────────────────────────────────────────
+        int participatedCount = (int) participatedRallies;
+        int myErrorCount     = 0;
+        int notReceivedCount = 0;
+
+        for (List<Hit> rally : rallies) {
+            boolean playerInRally = rally.stream()
+                    .anyMatch(h -> playerSide.equals(normalizePlayer(h.getPlayer())));
+            if (!playerInRally) continue;
+
+            Hit lastHit   = rally.get(rally.size() - 1);
+            boolean isMyLast = playerSide.equals(normalizePlayer(lastHit.getPlayer()));
+
+            if (isMyLast) {
+                boolean isError = rallyResults != null && rallyResults.stream()
+                        .filter(rr -> rr.getLastHitNumber() != null
+                                   && rr.getLastHitNumber().equals(lastHit.getHitNumber()))
+                        .findFirst()
+                        .map(rr -> "CONFIRMED_ERROR".equals(rr.getResultType()))
+                        .orElse(false);
+                if (isError) myErrorCount++;
+            } else {
+                notReceivedCount++;
+            }
         }
 
-        // ⑤ 실책률 — 랠리 마지막 타격자 = 실점 가정
-        long ralliesParticipated = rallies.stream()
-                .filter(r -> r.stream()
-                        .anyMatch(h -> playerSide.equals(normalizePlayer(h.getPlayer()))))
-                .count();
-        long errors = rallies.stream()
-                .filter(r -> !r.isEmpty() &&
-                        playerSide.equals(normalizePlayer(r.get(r.size() - 1).getPlayer())))
-                .count();
-        int errorRateScore = ralliesParticipated > 0
-                ? clamp((int) Math.round(errors * 100.0 / ralliesParticipated))
-                : 0;
+        double errorFreeRate = participatedCount > 0
+                ? 1.0 - (myErrorCount / (double) participatedCount) : 1.0;
+        double receptionRate = participatedCount > 0
+                ? 1.0 - (notReceivedCount / (double) participatedCount) : 1.0;
+
+        int consistencyScore = clamp(
+                (int) Math.round((errorFreeRate * 0.5 + receptionRate * 0.5) * 100.0));
+
+        // ── ③ RALLY SUSTAIN ──────────────────────────────────────
+        List<Long> playerHitsPerRally = rallies.stream()
+                .filter(r -> r.stream().anyMatch(h -> playerSide.equals(normalizePlayer(h.getPlayer()))))
+                .map(r -> r.stream().filter(h -> playerSide.equals(normalizePlayer(h.getPlayer()))).count())
+                .collect(Collectors.toList());
+
+        double avgHitsPerRally = playerHitsPerRally.isEmpty() ? 0.0
+                : playerHitsPerRally.stream().mapToLong(Long::longValue).average().orElse(0.0);
+        int rallyScore = clamp((int) Math.round(avgHitsPerRally / 8.0 * 100.0));
+
+        // ── ④ MOBILITY ───────────────────────────────────────────
+        // AI 서버가 0.0~1.0 비율로 전송 → ×100 해서 0~100 점수로 변환
+        int mobilityScore = 50;
+        if (playerMetrics != null) {
+            AnalysisCompleteRequest.PlayerMetricsData pm = playerMetrics.get(playerSide);
+            if (pm != null && pm.getHomeReturnRate() != null) {
+                mobilityScore = clamp(Math.round(pm.getHomeReturnRate() * 100));
+            }
+        }
+
+        // ── ⑤ DEFENSE ────────────────────────────────────────────
+        double defenseWeightedSum  = 0.0;
+        double defenseWeightTotal  = 0.0;
+
+        for (int i = 0; i < allHitsSorted.size(); i++) {
+            Hit curr = allHitsSorted.get(i);
+            if (!playerSide.equals(normalizePlayer(curr.getPlayer()))) continue;
+            if (curr.getTimeSec() == null) continue;
+
+            Hit prevOpponent = null;
+            for (int j = i - 1; j >= 0; j--) {
+                Hit candidate = allHitsSorted.get(j);
+                if (!playerSide.equals(normalizePlayer(candidate.getPlayer()))
+                        && candidate.getTimeSec() != null) {
+                    prevOpponent = candidate;
+                    break;
+                }
+            }
+            if (prevOpponent == null) continue;
+
+            float responseTime = curr.getTimeSec() - prevOpponent.getTimeSec();
+
+            int difficultyWeight;
+            if      (responseTime < 0.8f)  difficultyWeight = 3;
+            else if (responseTime < 1.3f)  difficultyWeight = 2;
+            else                           difficultyWeight = 1;
+
+            boolean isLastHitInRally = (i == allHitsSorted.size() - 1)
+                    || (allHitsSorted.get(i + 1).getTimeSec() - curr.getTimeSec() > 3.0f);
+
+            int success;
+            if (!isLastHitInRally) {
+                success = 1;
+            } else {
+                success = 1;
+                if (rallyResults != null) {
+                    boolean isError = rallyResults.stream()
+                            .filter(rr -> rr.getLastHitNumber() != null
+                                       && rr.getLastHitNumber().equals(curr.getHitNumber()))
+                            .findFirst()
+                            .map(rr -> "CONFIRMED_ERROR".equals(rr.getResultType()))
+                            .orElse(false);
+                    success = isError ? 0 : 1;
+                }
+            }
+
+            defenseWeightedSum += difficultyWeight * success;
+            defenseWeightTotal += difficultyWeight;
+        }
+
+        int defenseScore = defenseWeightTotal > 0
+                ? clamp((int) Math.round(defenseWeightedSum / defenseWeightTotal * 100.0))
+                : 50;
 
         return AbilityMetricsDto.builder()
-                .smash(smashScore)
-                .avgRallyTime(avgRallyTimeScore)
-                .speed(speedScore)
-                .distance(distanceScore)
-                .errorRate(errorRateScore)
+                .aggression(aggressionScore)
+                .consistency(consistencyScore)
+                .rally(rallyScore)
+                .mobility(mobilityScore)
+                .defense(defenseScore)
                 .build();
     }
 
@@ -466,6 +607,21 @@ public class AnalysisService {
         }
         rallies.add(current);
         return rallies;
+    }
+
+    private Map<String, AnalysisCompleteRequest.PlayerMetricsData> buildPersistedMetrics(AnalysisResult result) {
+        Map<String, AnalysisCompleteRequest.PlayerMetricsData> map = new java.util.HashMap<>();
+        if (result.getHomeReturnRateTop() != null) {
+            AnalysisCompleteRequest.PlayerMetricsData pm = new AnalysisCompleteRequest.PlayerMetricsData();
+            pm.setHomeReturnRate(result.getHomeReturnRateTop());
+            map.put("top", pm);
+        }
+        if (result.getHomeReturnRateBottom() != null) {
+            AnalysisCompleteRequest.PlayerMetricsData pm = new AnalysisCompleteRequest.PlayerMetricsData();
+            pm.setHomeReturnRate(result.getHomeReturnRateBottom());
+            map.put("bottom", pm);
+        }
+        return map.isEmpty() ? null : map;
     }
 
     /** 값을 0~100 범위로 클램프. */
