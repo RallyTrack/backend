@@ -34,6 +34,8 @@ public class VideoDetailResponse {
     @AllArgsConstructor
     public static class MatchSummary {
         private String matchScore;
+        private Integer unknownRallies;
+        private Integer totalRallies;
     }
 
     @Getter

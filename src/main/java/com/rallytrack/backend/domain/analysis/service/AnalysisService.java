@@ -17,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -101,9 +102,7 @@ public class AnalysisService {
         Video video = videoRepository.findById(request.getVideoId())
                 .orElseThrow(() -> new IllegalArgumentException("영상을 찾을 수 없습니다."));
 
-        // hits_data 기반 점수 파생 계산
-        // TODO: 배드민턴 규칙에 맞게 정교화 필요 (현재는 랠리 마지막 타격자 기준 단순 추정)
-        ScoreResult score = deriveScore(request.getHitsData());
+        ScoreResult score = deriveScore(request.getHitsData(), request.getRallyResults());
 
         // AnalysisResult 저장
         Float homeReturnRateTop = null;
@@ -128,6 +127,8 @@ public class AnalysisService {
                 .topPlayerScore(score.topPlayerScore)
                 .bottomPlayerScore(score.bottomPlayerScore)
                 .matchOutcome(score.matchOutcome)
+                .unknownRallies(score.unknownRallies)
+                .totalRallies(score.totalRallies)
                 .build();
 
         analysisResultRepository.save(analysisResult);
@@ -186,61 +187,105 @@ public class AnalysisService {
     // ── 점수 파생 계산 ────────────────────────────────────────
 
     /**
-     * hits_data의 랠리 구조에서 코트 상단/하단 점수를 추정합니다.
+     * hits_data + rally_results 기반 점수 계산.
      *
-     * 배드민턴 기본 규칙: 마지막으로 타격한 선수가 실점 (상대 득점).
-     * 랠리 구분: 타점 간격이 3초 이상 벌어지면 새 랠리로 분리.
-     *
-     * 예) A→B→A 순서로 타격 후 A가 마지막 → B 득점 (topPlayer 기준)
-     *
-     * TODO: 실제 배드민턴 규칙(서브권, 코트 in/out 판정 등)에 맞게 정교화 필요
+     * WINNER          → 마지막 타격자 득점 (인바운드 확인)
+     * CONFIRMED_ERROR → 상대 득점 (아웃 확인)
+     * UNKNOWN / 없음  → 점수 미반영, unknownRallies 카운트
      */
-    private ScoreResult deriveScore(List<AnalysisCompleteRequest.HitData> hitsData) {
+    private ScoreResult deriveScore(
+            List<AnalysisCompleteRequest.HitData> hitsData,
+            List<AnalysisCompleteRequest.RallyResultData> rallyResults) {
+
         if (hitsData == null || hitsData.isEmpty()) {
-            return new ScoreResult(0, 0, "DRAW");
+            return new ScoreResult(0, 0, "DRAW", 0, 0);
         }
 
-        int topScore    = 0; // pink_top 득점
-        int bottomScore = 0; // green_bottom 득점
+        Map<Integer, AnalysisCompleteRequest.RallyResultData> rrMap = new HashMap<>();
+        if (rallyResults != null) {
+            for (AnalysisCompleteRequest.RallyResultData rr : rallyResults) {
+                if (rr.getLastHitNumber() != null) {
+                    rrMap.put(rr.getLastHitNumber(), rr);
+                }
+            }
+        }
+
+        int topScore     = 0;
+        int bottomScore  = 0;
+        int unknownCount = 0;
+        int totalRallies = 0;
 
         AnalysisCompleteRequest.HitData lastInRally = hitsData.get(0);
         AnalysisCompleteRequest.HitData prev        = hitsData.get(0);
 
         for (int i = 1; i < hitsData.size(); i++) {
             AnalysisCompleteRequest.HitData hit = hitsData.get(i);
-
             boolean isNewRally = hit.getTimeSec() != null
                     && prev.getTimeSec() != null
                     && (hit.getTimeSec() - prev.getTimeSec()) > 3.0f;
 
             if (isNewRally) {
-                // 이전 랠리 종료: 마지막 타격자가 실점 → 상대 득점
-                if ("pink_top".equals(lastInRally.getPlayer())) {
-                    bottomScore++;
-                } else {
-                    topScore++;
-                }
+                int[] res = applyRallyScore(lastInRally, rrMap, topScore, bottomScore, unknownCount);
+                topScore     = res[0];
+                bottomScore  = res[1];
+                unknownCount = res[2];
+                totalRallies++;
             }
 
             lastInRally = hit;
-            prev = hit;
+            prev        = hit;
         }
 
-        // 마지막 랠리 처리
-        if ("pink_top".equals(lastInRally.getPlayer())) {
-            bottomScore++;
-        } else {
-            topScore++;
-        }
+        int[] res = applyRallyScore(lastInRally, rrMap, topScore, bottomScore, unknownCount);
+        topScore     = res[0];
+        bottomScore  = res[1];
+        unknownCount = res[2];
+        totalRallies++;
 
-        topScore    = Math.min(topScore, 21);
-        bottomScore = Math.min(bottomScore, 21);
+        topScore    = Math.min(topScore, 30);
+        bottomScore = Math.min(bottomScore, 30);
 
         String outcome = topScore > bottomScore ? "TOP_WIN"
                        : topScore < bottomScore ? "BOTTOM_WIN"
                        : "DRAW";
 
-        return new ScoreResult(topScore, bottomScore, outcome);
+        System.out.printf("[점수계산] top=%d bottom=%d unknown=%d/%d%n",
+                topScore, bottomScore, unknownCount, totalRallies);
+
+        return new ScoreResult(topScore, bottomScore, outcome, unknownCount, totalRallies);
+    }
+
+    /**
+     * 랠리 1개 득점 결정.
+     *
+     * WINNER          → 마지막 타격자 득점
+     * CONFIRMED_ERROR → 상대 득점
+     * UNKNOWN / null  → 점수 미반영
+     *
+     * @return [topScore, bottomScore, unknownCount]
+     */
+    private int[] applyRallyScore(
+            AnalysisCompleteRequest.HitData lastHit,
+            Map<Integer, AnalysisCompleteRequest.RallyResultData> rrMap,
+            int topScore, int bottomScore, int unknownCount) {
+
+        boolean isPinkTop = "pink_top".equals(lastHit.getPlayer());
+        AnalysisCompleteRequest.RallyResultData rr =
+                (lastHit.getHitNumber() != null) ? rrMap.get(lastHit.getHitNumber()) : null;
+
+        String resultType = (rr != null) ? rr.getResultType() : null;
+
+        if ("WINNER".equals(resultType)) {
+            if (isPinkTop) topScore++;
+            else           bottomScore++;
+        } else if ("CONFIRMED_ERROR".equals(resultType)) {
+            if (isPinkTop) bottomScore++;
+            else           topScore++;
+        } else {
+            unknownCount++;
+        }
+
+        return new int[]{topScore, bottomScore, unknownCount};
     }
 
     /**
@@ -258,11 +303,16 @@ public class AnalysisService {
         final int topPlayerScore;
         final int bottomPlayerScore;
         final String matchOutcome;
+        final int unknownRallies;
+        final int totalRallies;
 
-        ScoreResult(int topPlayerScore, int bottomPlayerScore, String matchOutcome) {
+        ScoreResult(int topPlayerScore, int bottomPlayerScore,
+                    String matchOutcome, int unknownRallies, int totalRallies) {
             this.topPlayerScore    = topPlayerScore;
             this.bottomPlayerScore = bottomPlayerScore;
             this.matchOutcome      = matchOutcome;
+            this.unknownRallies    = unknownRallies;
+            this.totalRallies      = totalRallies;
         }
     }
 

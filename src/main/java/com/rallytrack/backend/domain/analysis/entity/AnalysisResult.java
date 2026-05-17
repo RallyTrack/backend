@@ -57,6 +57,12 @@ public class AnalysisResult {
     @Column(name = "match_outcome")
     private String matchOutcome;
 
+    @Column(name = "unknown_rallies")
+    private Integer unknownRallies;
+
+    @Column(name = "total_rallies")
+    private Integer totalRallies;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
