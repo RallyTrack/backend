@@ -1,5 +1,6 @@
 package com.rallytrack.backend.domain.analysis.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -15,7 +16,7 @@ public class AnalysisReportResponse {
     private SummaryDto summary;
     private PlayersDto players;
 
-    // 추후 삭제할 legacy, 프론트단에서 flat field참조 안하게 되면 삭제
+    // 추후 삭제할 legacy
     private PositionAnalysisDto positionAnalysis;
     private StrokeTypesDto strokeTypes;
     private AbilityMetricsDto abilityMetrics;
@@ -25,7 +26,6 @@ public class AnalysisReportResponse {
     private Integer totalHits;
     private List<HitDto> hitsData;
 
-    // 코트 상단(pink_top) / 하단(green_bottom) 기준 점수
     private Integer topPlayerScore;
     private Integer bottomPlayerScore;
 
@@ -41,5 +41,19 @@ public class AnalysisReportResponse {
         private Float timeSec;
         private String player;
         private String strokeType;
+
+        // 히트맵 좌표 (0~100, 선수 위치 기반 호모그래피 변환)
+        @JsonProperty("minimap_x")
+        private Float minimapX;
+
+        @JsonProperty("minimap_y")
+        private Float minimapY;
+
+        // 선수 중심 좌표 (0~1 프레임 정규화)
+        @JsonProperty("player_x")
+        private Float playerX;
+
+        @JsonProperty("player_y")
+        private Float playerY;
     }
 }
