@@ -16,7 +16,7 @@ public class AnalysisReportResponse {
     private SummaryDto summary;
     private PlayersDto players;
 
-    // 추후 삭제할 legacy (프론트에서 flat field 참조 안 하게 되면 삭제)
+    // 추후 삭제할 legacy
     private PositionAnalysisDto positionAnalysis;
     private StrokeTypesDto strokeTypes;
     private AbilityMetricsDto abilityMetrics;
@@ -42,12 +42,18 @@ public class AnalysisReportResponse {
         private String player;
         private String strokeType;
 
-        // 미니맵과 동일한 셔틀콕 좌표 (0~100) — 프론트 히트맵에서 사용
-        // snake_case로 직렬화해야 reportpageApi.ts의 minimap_x/y 필드명과 일치
+        // 히트맵 좌표 (0~100, 선수 위치 기반 호모그래피 변환)
         @JsonProperty("minimap_x")
         private Float minimapX;
 
         @JsonProperty("minimap_y")
         private Float minimapY;
+
+        // 선수 중심 좌표 (0~1 프레임 정규화)
+        @JsonProperty("player_x")
+        private Float playerX;
+
+        @JsonProperty("player_y")
+        private Float playerY;
     }
 }
