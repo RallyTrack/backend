@@ -26,28 +26,44 @@ public class S3Service {
     @Value("${cloud.aws.s3.bucket}")
     private String bucket;
 
-    @Value("${cloud.aws.region}")
-    private String region;
+    // 필드명이 S3Config의 빈 이름과 일치해야 올바른 presigner가 주입된다
+    private final S3Presigner s3Presigner;    // 브라우저용 (public-endpoint 서명)
+    private final S3Presigner aiS3Presigner;  // AI 서버용 (LAN ai-endpoint 서명)
 
-    private final S3Presigner s3Presigner;
-
+    // DB에는 전체 URL이 아닌 object key(예: videos/uuid_name.mp4)만 저장한다.
+    // 스토리지 endpoint(MinIO ↔ AWS)가 바뀌어도 DB 데이터가 유효하도록 하기 위함.
     public String upLoadFile(MultipartFile file) throws IOException {
-        String fileName = "videos/" + UUID.randomUUID() + "_" + file.getOriginalFilename();
+        String key = "videos/" + UUID.randomUUID() + "_" + file.getOriginalFilename();
 
         PutObjectRequest request = PutObjectRequest.builder()
                 .bucket(bucket)
-                .key(fileName)
+                .key(key)
                 .contentType(file.getContentType())
                 .build();
 
         s3Client.putObject(request, RequestBody.fromBytes(file.getBytes()));
 
-        return String.format("https://%s.s3.%s.amazonaws.com/%s", bucket, region, fileName);
+        return key;
     }
 
-    public String generatePresignedUrl(String s3Url) {
-        String key = s3Url.substring(s3Url.indexOf(".amazonaws.com/") + ".amazonaws.com/".length());
+    public String generatePresignedUrl(String key) {
+        return presignGet(s3Presigner, key);
+    }
 
+    public String generatePresignedUploadUrl(String key) {
+        return presignPut(s3Presigner, key);
+    }
+
+    // AI 서버에 전달하는 URL은 LAN 주소로 서명 (Cloudflare 미경유, DNS 불필요)
+    public String generateAiPresignedUrl(String key) {
+        return presignGet(aiS3Presigner, key);
+    }
+
+    public String generateAiPresignedUploadUrl(String key) {
+        return presignPut(aiS3Presigner, key);
+    }
+
+    private String presignGet(S3Presigner presigner, String key) {
         GetObjectRequest getObjectRequest = GetObjectRequest.builder()
                 .bucket(bucket)
                 .key(key)
@@ -58,10 +74,10 @@ public class S3Service {
                 .signatureDuration(Duration.ofHours(1))
                 .build();
 
-        return s3Presigner.presignGetObject(presignRequest).url().toString();
+        return presigner.presignGetObject(presignRequest).url().toString();
     }
 
-    public String generatePresignedUploadUrl(String key) {
+    private String presignPut(S3Presigner presigner, String key) {
         PutObjectRequest putObjectRequest = PutObjectRequest.builder()
                 .bucket(bucket)
                 .key(key)
@@ -73,12 +89,10 @@ public class S3Service {
                 .signatureDuration(Duration.ofHours(1))
                 .build();
 
-        return s3Presigner.presignPutObject(presignRequest).url().toString();
+        return presigner.presignPutObject(presignRequest).url().toString();
     }
 
-    public void deleteFile(String s3Url) {
-        String key = s3Url.substring(s3Url.indexOf(".amazonaws.com/") + ".amazonaws.com/".length());
-
+    public void deleteFile(String key) {
         DeleteObjectRequest deleteRequest = DeleteObjectRequest.builder()
                 .bucket(bucket)
                 .key(key)

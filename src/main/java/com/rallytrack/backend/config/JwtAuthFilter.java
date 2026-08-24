@@ -5,6 +5,7 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
@@ -17,6 +18,10 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
     private final JwtUtil jwtUtil;
 
+    // AI 서버 콜백 검증용 공유 시크릿 (env: ANALYSIS_CALLBACK_SECRET)
+    @Value("${app.analysis.callback-secret}")
+    private String callbackSecret;
+
     // 인증이 필요 없는 경로
     private static final List<String> WHITELIST = List.of(
             "/api/v1/onboarding",
@@ -25,8 +30,13 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             "/api/v1/token/refresh",
             "/api/v1/logout",
             "/swagger-ui",
-            "/v3/api-docs",
-            "/api/v1/analysis/complete"
+            "/v3/api-docs"
+    );
+
+    // AI 서버 콜백 경로: JWT 대신 X-Internal-Token 헤더로 검증
+    private static final List<String> CALLBACK_PATHS = List.of(
+            "/api/v1/analysis/complete",
+            "/api/v1/analysis/fail"
     );
 
     @Override
@@ -40,6 +50,17 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         // CORS Preflight 요청은 인증 없이 통과
         if ("OPTIONS".equalsIgnoreCase(request.getMethod())) {
             filterChain.doFilter(request, response);
+            return;
+        }
+
+        // AI 서버 콜백은 공유 시크릿으로 검증 (도메인이 외부에 노출되므로 무인증 금지)
+        if (CALLBACK_PATHS.stream().anyMatch(path::startsWith)) {
+            String internalToken = request.getHeader("X-Internal-Token");
+            if (internalToken != null && internalToken.equals(callbackSecret)) {
+                filterChain.doFilter(request, response);
+            } else {
+                reject(response);
+            }
             return;
         }
 
@@ -62,15 +83,11 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             }
         }
 
-        // X-User-Id 헤더가 있으면 허용 (Swagger 테스트용)
-        String userIdHeader = request.getHeader("X-User-Id");
-        if (userIdHeader != null) {
-            request.setAttribute("userId", Long.parseLong(userIdHeader));
-            filterChain.doFilter(request, response);
-            return;
-        }
-
         // 인증 실패
+        reject(response);
+    }
+
+    private void reject(HttpServletResponse response) throws IOException {
         response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
         response.setContentType("application/json;charset=UTF-8");
         response.getWriter().write("{\"code\":401,\"message\":\"인증이 필요합니다.\"}");

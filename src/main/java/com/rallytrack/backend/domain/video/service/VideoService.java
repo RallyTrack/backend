@@ -2,6 +2,7 @@ package com.rallytrack.backend.domain.video.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rallytrack.backend.config.S3Service;
+import com.rallytrack.backend.config.SlackNotifier;
 import com.rallytrack.backend.domain.analysis.repository.AnalysisResultRepository;
 import com.rallytrack.backend.domain.user.entity.User;
 import com.rallytrack.backend.domain.user.repository.UserRepository;
@@ -12,6 +13,7 @@ import com.rallytrack.backend.domain.video.entity.Video;
 import com.rallytrack.backend.domain.video.repository.TimelineEventRepository;
 import com.rallytrack.backend.domain.video.repository.VideoRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
@@ -38,11 +40,13 @@ public class VideoService {
         private final AnalysisResultRepository analysisResultRepository;
         private final UserRepository userRepository;
         private final S3Service s3Service;
+        private final SlackNotifier slackNotifier;
         private final RestTemplate restTemplate;
         private final ObjectMapper objectMapper = new ObjectMapper();
 
-        private static final String S3_BUCKET = "rallytrack-videos";
-        private static final String S3_REGION = "us-east-1";
+        // AI 분석 서버 주소 (env: AI_SERVER_URL)
+        @Value("${ai.server.url}")
+        private String aiServerUrl;
 
         // ── 영상 업로드 ──────────────────────────────────────────
 
@@ -104,25 +108,31 @@ public class VideoService {
 
                 Video saved = videoRepository.save(video);
 
+                slackNotifier.notify(String.format(
+                                "📤 영상 업로드 — videoId=%d, 제목: %s, mode=%s, 크기: %.1fMB, 재생시간: %ds",
+                                saved.getVideoId(), title, analysisMode,
+                                videoFile.getSize() / 1024.0 / 1024.0,
+                                durationSeconds != null ? durationSeconds : 0));
+
                 // AI 서버 호출
                 try {
-                        String presignedUrl = s3Service.generatePresignedUrl(s3Url);
+                        // AI 서버용 URL은 LAN presigner로 서명 (브라우저용 공개 도메인과 분리)
+                        String presignedUrl = s3Service.generateAiPresignedUrl(s3Url);
 
+                        // DB·콜백에는 object key만 전달한다 (S3Service 주석 참고)
                         String skeletonKey = "skeletons/" + UUID.randomUUID() + "_skeleton.mp4";
-                        String skeletonUploadUrl = s3Service.generatePresignedUploadUrl(skeletonKey);
-                        String skeletonVideoUrl = buildS3Url(skeletonKey);
+                        String skeletonUploadUrl = s3Service.generateAiPresignedUploadUrl(skeletonKey);
 
                         String minimapKey = "minimaps/" + UUID.randomUUID() + "_minimap.mp4";
-                        String minimapUploadUrl = s3Service.generatePresignedUploadUrl(minimapKey);
-                        String minimapVideoUrl = buildS3Url(minimapKey);
+                        String minimapUploadUrl = s3Service.generateAiPresignedUploadUrl(minimapKey);
 
                         Map<String, Object> analyzeRequest = new HashMap<>();
                         analyzeRequest.put("videoId", saved.getVideoId());
                         analyzeRequest.put("s3Url", presignedUrl);
                         analyzeRequest.put("skeletonUploadUrl", skeletonUploadUrl);
-                        analyzeRequest.put("skeletonVideoUrl", skeletonVideoUrl);
+                        analyzeRequest.put("skeletonVideoUrl", skeletonKey);
                         analyzeRequest.put("minimapUploadUrl", minimapUploadUrl);
-                        analyzeRequest.put("minimapVideoUrl", minimapVideoUrl);
+                        analyzeRequest.put("minimapVideoUrl", minimapKey);
                         analyzeRequest.put("mode", analysisMode);
 
                         Map<String, Object> courtCornersMap = new HashMap<>();
@@ -144,12 +154,18 @@ public class VideoService {
                                         + objectMapper.writeValueAsString(courtCornersMap));
 
                         restTemplate.postForEntity(
-                                        "http://localhost:8000/analyze",
+                                        aiServerUrl + "/analyze",
                                         analyzeRequest,
                                         String.class);
+                        slackNotifier.notify("🚀 AI 분석 요청 전송 완료 — videoId=" + saved.getVideoId()
+                                        + " → " + aiServerUrl);
                 } catch (Exception e) {
                         e.printStackTrace();
                         // AI 서버 호출 실패해도 업로드 자체는 성공으로 처리
+                        // (단, 이 경우 영상이 PROCESSING에 영구히 머물므로 반드시 알림)
+                        slackNotifier.notify("⚠️ AI 서버 호출 실패 — videoId=" + saved.getVideoId()
+                                        + "\n에러: " + e.getMessage()
+                                        + "\n※ 이 영상은 PROCESSING 상태로 남습니다. AI 서버 확인 후 재업로드 필요");
                 }
 
                 return VideoUploadResponse.builder()
@@ -224,7 +240,9 @@ public class VideoService {
                                                 .videoUrl(s3Service.generatePresignedUrl(video.getS3Url()))
                                                 .skeletonVideoUrl(skeletonUrl)
                                                 .minimapVideoUrl(minimapUrl)
-                                                .thumbnailUrl(video.getThumbnailUrl())
+                                                .thumbnailUrl(video.getThumbnailUrl() != null
+                                                                ? s3Service.generatePresignedUrl(video.getThumbnailUrl())
+                                                                : null)
                                                 .durationSeconds(video.getDurationSeconds())
                                                 .build())
                                 .matchSummary(matchSummary)
@@ -285,10 +303,6 @@ public class VideoService {
         }
 
         // ── 헬퍼 ─────────────────────────────────────────────────
-
-        private String buildS3Url(String key) {
-                return String.format("https://%s.s3.%s.amazonaws.com/%s", S3_BUCKET, S3_REGION, key);
-        }
 
         private String normalizeAnalysisMode(String mode) {
                 return "amateur".equalsIgnoreCase(mode != null ? mode.trim() : "") ? "amateur" : "pro";

@@ -31,4 +31,24 @@ public class DashboardController {
         DashboardResponse response = dashboardService.getDashboard(userId);
         return ResponseEntity.ok(ApiResponse.success("대시보드 데이터 조회 성공", response));
     }
+
+    @Operation(summary = "활동 통계", description = "최근 7일 사용/업로드 추이를 조회합니다.")
+    @GetMapping("/dashboard/activity")
+    public ResponseEntity<ApiResponse<java.util.Map<String, Object>>> getActivityStats(
+            HttpServletRequest request) {
+
+        Long userId = (Long) request.getAttribute("userId");
+        return ResponseEntity.ok(ApiResponse.success("활동 통계 조회 성공",
+                dashboardService.getActivityStats(userId)));
+    }
+
+    @Operation(summary = "퍼포먼스 트렌드", description = "최근 7주 분석 기반 퍼포먼스 추이를 조회합니다.")
+    @GetMapping("/dashboard/trend")
+    public ResponseEntity<ApiResponse<java.util.Map<String, Object>>> getPerformanceTrend(
+            HttpServletRequest request) {
+
+        Long userId = (Long) request.getAttribute("userId");
+        return ResponseEntity.ok(ApiResponse.success("퍼포먼스 트렌드 조회 성공",
+                dashboardService.getPerformanceTrend(userId)));
+    }
 }

@@ -1,5 +1,6 @@
 package com.rallytrack.backend.domain.analysis.controller;
 
+import com.rallytrack.backend.config.SlackNotifier;
 import com.rallytrack.backend.domain.analysis.dto.AnalysisCompleteRequest;
 import com.rallytrack.backend.domain.analysis.dto.AnalysisReportResponse;
 import com.rallytrack.backend.domain.analysis.service.AnalysisService;
@@ -22,6 +23,7 @@ public class AnalysisController {
 
     private final AnalysisService analysisService;
     private final VideoRepository videoRepository;
+    private final SlackNotifier slackNotifier;
 
     @Operation(summary = "분석 리포트 조회", description = "영상 분석 리포트를 조회합니다.")
     @GetMapping("/{videoId}")
@@ -36,6 +38,8 @@ public class AnalysisController {
     public ResponseEntity<ApiResponse<Void>> analysisComplete(
             @RequestBody AnalysisCompleteRequest request) {
         analysisService.saveResult(request);
+        slackNotifier.notify("✅ 분석 결과 저장 — videoId=" + request.getVideoId()
+                + ", totalHits=" + request.getTotalHits());
         return ResponseEntity.ok(ApiResponse.success("분석 결과 저장 완료", null));
     }
 
@@ -52,6 +56,7 @@ public class AnalysisController {
         });
 
         System.err.println("[분석 실패] videoId=" + videoId + ", error=" + error);
+        slackNotifier.notify("❌ 분석 실패 — videoId=" + videoId + "\n에러: " + error);
         return ResponseEntity.ok(ApiResponse.success("실패 상태 업데이트 완료", null));
     }
 }

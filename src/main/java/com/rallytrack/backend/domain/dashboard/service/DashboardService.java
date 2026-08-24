@@ -10,10 +10,17 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.DayOfWeek;
+import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
+
+import com.rallytrack.backend.domain.analysis.entity.Hit;
 
 @Service
 @RequiredArgsConstructor
@@ -89,6 +96,109 @@ public class DashboardService {
                         .build())
                 .recentVideos(recentVideos)
                 .build();
+    }
+
+    // ── 활동 통계 (최근 7일) ──────────────────────────────────
+
+    @Transactional(readOnly = true)
+    public Map<String, Object> getActivityStats(Long userId) {
+        List<Video> videos = videoRepository
+                .findByUserIdAndVideoStatusNotOrderByUploadDateDesc(userId, "DELETED");
+        List<AnalysisResult> results = fetchResults(videos);
+
+        LocalDate today = LocalDate.now();
+        DateTimeFormatter dayFmt = DateTimeFormatter.ofPattern("M/d");
+
+        List<Map<String, Object>> stats = new ArrayList<>();
+        for (int i = 6; i >= 0; i--) {
+            LocalDate day = today.minusDays(i);
+            long uploadCount = videos.stream()
+                    .filter(v -> v.getUploadDate() != null
+                            && day.equals(v.getUploadDate().toLocalDate()))
+                    .count();
+            // 사용 횟수 근사치: 해당 날짜에 완료된 분석 수
+            long usageCount = results.stream()
+                    .filter(ar -> ar.getCreatedAt() != null
+                            && day.equals(ar.getCreatedAt().toLocalDate()))
+                    .count();
+
+            Map<String, Object> point = new LinkedHashMap<>();
+            point.put("day", day.format(dayFmt));
+            point.put("usageCount", usageCount);
+            point.put("uploadCount", uploadCount);
+            stats.add(point);
+        }
+        return Map.of("stats", stats);
+    }
+
+    // ── 퍼포먼스 트렌드 (최근 7주) ────────────────────────────
+
+    @Transactional(readOnly = true)
+    public Map<String, Object> getPerformanceTrend(Long userId) {
+        List<Video> videos = videoRepository
+                .findByUserIdAndVideoStatusNotOrderByUploadDateDesc(userId, "DELETED");
+        List<AnalysisResult> results = fetchResults(videos);
+
+        LocalDate baseWeekStart = LocalDate.now().minusWeeks(6).with(DayOfWeek.MONDAY);
+
+        List<Integer> smash = new ArrayList<>();
+        List<Integer> defense = new ArrayList<>();
+        List<Integer> accuracy = new ArrayList<>();
+
+        for (int w = 0; w < 7; w++) {
+            LocalDate weekStart = baseWeekStart.plusWeeks(w);
+            LocalDate weekEnd = weekStart.plusWeeks(1);
+
+            List<AnalysisResult> weekly = results.stream()
+                    .filter(ar -> ar.getCreatedAt() != null)
+                    .filter(ar -> {
+                        LocalDate d = ar.getCreatedAt().toLocalDate();
+                        return !d.isBefore(weekStart) && d.isBefore(weekEnd);
+                    })
+                    .collect(Collectors.toList());
+
+            List<Hit> hits = weekly.stream()
+                    .flatMap(ar -> ar.getHits().stream())
+                    .collect(Collectors.toList());
+
+            long total = hits.size();
+            long smashCnt = hits.stream().filter(h -> "Smash".equals(h.getStrokeType())).count();
+            // 수비성 스트로크: Clear(수비적 클리어) + Net(네트 처리)
+            long defenseCnt = hits.stream()
+                    .filter(h -> "Clear".equals(h.getStrokeType()) || "Net".equals(h.getStrokeType()))
+                    .count();
+
+            smash.add(total == 0 ? 0 : (int) Math.round(smashCnt * 100.0 / total));
+            defense.add(total == 0 ? 0 : (int) Math.round(defenseCnt * 100.0 / total));
+            accuracy.add(averageReturnRate(weekly));
+        }
+
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("smash", smash);
+        data.put("defense", defense);
+        data.put("accuracy", accuracy);
+        return data;
+    }
+
+    private List<AnalysisResult> fetchResults(List<Video> videos) {
+        return videos.stream()
+                .map(v -> analysisResultRepository.findByVideoVideoId(v.getVideoId()))
+                .filter(Optional::isPresent)
+                .map(Optional::get)
+                .collect(Collectors.toList());
+    }
+
+    // 리턴 성공률 평균 (top/bottom 평균). 0~1 스케일이면 %로 환산
+    private int averageReturnRate(List<AnalysisResult> weekly) {
+        List<Double> rates = new ArrayList<>();
+        for (AnalysisResult ar : weekly) {
+            if (ar.getHomeReturnRateTop() != null) rates.add(ar.getHomeReturnRateTop().doubleValue());
+            if (ar.getHomeReturnRateBottom() != null) rates.add(ar.getHomeReturnRateBottom().doubleValue());
+        }
+        if (rates.isEmpty()) return 0;
+        double avg = rates.stream().mapToDouble(Double::doubleValue).average().orElse(0);
+        if (avg <= 1.0) avg *= 100.0;
+        return (int) Math.round(Math.min(avg, 100.0));
     }
 
     // ── 헬퍼 ─────────────────────────────────────────────────
