@@ -14,6 +14,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
+import java.util.Objects;
 
 @Tag(name = "Analysis", description = "분석 리포트 API")
 @RestController
@@ -38,8 +39,22 @@ public class AnalysisController {
     public ResponseEntity<ApiResponse<Void>> analysisComplete(
             @RequestBody AnalysisCompleteRequest request) {
         analysisService.saveResult(request);
-        slackNotifier.notify("✅ 분석 결과 저장 — videoId=" + request.getVideoId()
-                + ", totalHits=" + request.getTotalHits());
+
+        String storedMode = videoRepository.findById(request.getVideoId())
+                .map(Video::getAnalysisMode)
+                .orElse(null);
+        String callbackMode = request.getAnalysisMode();
+        String modeCheck = callbackMode == null
+                ? "NOT_REPORTED"
+                : Objects.equals(storedMode, callbackMode) ? "MATCH" : "MISMATCH";
+        String completionLog = "✅ 분석 결과 저장 — videoId=" + request.getVideoId()
+                + ", storedMode=" + storedMode
+                + ", callbackMode=" + callbackMode
+                + ", modeCheck=" + modeCheck
+                + ", strokeSchemes=" + request.getStrokeClassSchemes()
+                + ", totalHits=" + request.getTotalHits();
+        System.out.println(completionLog);
+        slackNotifier.notify(completionLog);
         return ResponseEntity.ok(ApiResponse.success("분석 결과 저장 완료", null));
     }
 
@@ -56,7 +71,11 @@ public class AnalysisController {
         });
 
         System.err.println("[분석 실패] videoId=" + videoId + ", error=" + error);
-        slackNotifier.notify("❌ 분석 실패 — videoId=" + videoId + "\n에러: " + error);
+        String storedMode = videoRepository.findById(videoId)
+                .map(Video::getAnalysisMode)
+                .orElse(null);
+        slackNotifier.notify("❌ 분석 실패 — videoId=" + videoId
+                + ", storedMode=" + storedMode + "\n에러: " + error);
         return ResponseEntity.ok(ApiResponse.success("실패 상태 업데이트 완료", null));
     }
 }

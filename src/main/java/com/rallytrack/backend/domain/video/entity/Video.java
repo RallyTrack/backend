@@ -80,6 +80,10 @@ public class Video {
     @Column(name = "duration_seconds")
     private Integer durationSeconds;
 
+    // "pro" | "amateur". NULL은 컬럼 추가 전 업로드된 기존 영상이라 모드를 알 수 없다는 뜻이다.
+    @Column(name = "analysis_mode", length = 16)
+    private String analysisMode;
+
     @Column(name = "video_status")
     @Builder.Default
     private String videoStatus = "PROCESSING";
