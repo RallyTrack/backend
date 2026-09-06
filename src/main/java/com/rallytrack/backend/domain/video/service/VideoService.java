@@ -56,7 +56,7 @@ public class VideoService {
                         Integer durationSeconds, String mode) {
                 User user = userRepository.findById(userId)
                                 .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
-                String analysisMode = normalizeAnalysisMode(mode);
+                String analysisMode = AnalysisMode.normalize(mode);
 
                 String thumbnailS3Url = null;
                 try {
@@ -302,9 +302,4 @@ public class VideoService {
                 videoRepository.save(video);
         }
 
-        // ── 헬퍼 ─────────────────────────────────────────────────
-
-        private String normalizeAnalysisMode(String mode) {
-                return "amateur".equalsIgnoreCase(mode != null ? mode.trim() : "") ? "amateur" : "pro";
-        }
 }

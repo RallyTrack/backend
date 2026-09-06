@@ -1,0 +1,39 @@
+spring:
+  autoconfigure:
+    exclude: org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration
+  datasource:
+    url: jdbc:h2:mem:rallytrack;MODE=MariaDB;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1
+    username: sa
+    password: ""
+    driver-class-name: org.h2.Driver
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+
+jwt:
+  secret: test-only-secret-that-is-long-enough-for-hs256
+  access-token-expiration: 3600000
+  refresh-token-expiration: 604800000
+
+cloud:
+  aws:
+    s3:
+      bucket: rallytrack-test
+      endpoint: ""
+      public-endpoint: ""
+      ai-endpoint: ""
+      path-style: true
+    region: us-east-1
+    credentials:
+      access-key: test-access-key
+      secret-key: test-secret-key
+
+app:
+  cors:
+    allowed-origins: http://localhost:5173
+  analysis:
+    callback-secret: test-callback-secret
+
+ai:
+  server:
+    url: http://localhost:8000
