@@ -1,0 +1,53 @@
+name: Backend CI/CD
+
+on:
+  push:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  verify:
+    name: Backend verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Validate wrapper and configure Gradle cache
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Run unit and context tests
+        run: ./gradlew test --no-daemon
+
+      - name: Build executable jar
+        run: ./gradlew bootJar --no-daemon
+
+  deploy:
+    name: Deploy frontend and backend to Pi
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: verify
+    runs-on: [self-hosted, rallytrack-pi]
+    environment: production-pi
+    timeout-minutes: 30
+    steps:
+      - name: Run guarded Pi deployment
+        env:
+          CONFIGURED_RALLYTRACK_ROOT: ${{ vars.RALLYTRACK_ROOT }}
+        run: |
+          deployment_root="${CONFIGURED_RALLYTRACK_ROOT:-/home/junmin/RallyTrack}"
+          "$deployment_root/devops/pi/deploy.sh" backend "$GITHUB_SHA"
