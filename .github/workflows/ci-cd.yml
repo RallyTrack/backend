@@ -39,7 +39,7 @@ jobs:
 
   deploy:
     name: Deploy frontend and backend to Pi
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    if: vars.ENABLE_CD == 'true' && github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     needs: verify
     runs-on: [self-hosted, rallytrack-pi]
     environment: production-pi
