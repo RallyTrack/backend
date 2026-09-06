@@ -12,4 +12,5 @@ public class VideoUploadResponse {
     private String title;
     private String uploadDate;
     private String status;
+    private String analysisMode;
 }

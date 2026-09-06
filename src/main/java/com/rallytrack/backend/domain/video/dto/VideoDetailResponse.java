@@ -27,6 +27,8 @@ public class VideoDetailResponse {
         private String thumbnailUrl;
         // 초 단위 정수 — 프론트에서 "M:SS" 포맷 변환 또는 표시 용도
         private Integer durationSeconds;
+        // "pro" | "amateur". null이면 컬럼 추가 전 업로드된 기존 영상
+        private String analysisMode;
     }
 
     @Getter

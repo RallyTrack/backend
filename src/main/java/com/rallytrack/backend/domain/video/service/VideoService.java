@@ -104,15 +104,18 @@ public class VideoService {
                                                 : null)
                                 .durationSeconds(
                                                 durationSeconds != null && durationSeconds > 0 ? durationSeconds : null)
+                                .analysisMode(analysisMode)
                                 .build();
 
                 Video saved = videoRepository.save(video);
 
-                slackNotifier.notify(String.format(
-                                "📤 영상 업로드 — videoId=%d, 제목: %s, mode=%s, 크기: %.1fMB, 재생시간: %ds",
+                String uploadLog = String.format(
+                                "📤 영상 업로드 — videoId=%d, 제목: %s, analysisMode=%s (DB 저장), 크기: %.1fMB, 재생시간: %ds",
                                 saved.getVideoId(), title, analysisMode,
                                 videoFile.getSize() / 1024.0 / 1024.0,
-                                durationSeconds != null ? durationSeconds : 0));
+                                durationSeconds != null ? durationSeconds : 0);
+                System.out.println(uploadLog);
+                slackNotifier.notify(uploadLog);
 
                 // AI 서버 호출
                 try {
@@ -157,8 +160,10 @@ public class VideoService {
                                         aiServerUrl + "/analyze",
                                         analyzeRequest,
                                         String.class);
-                        slackNotifier.notify("🚀 AI 분석 요청 전송 완료 — videoId=" + saved.getVideoId()
-                                        + " → " + aiServerUrl);
+                        String requestLog = "🚀 AI 분석 요청 전송 완료 — videoId=" + saved.getVideoId()
+                                        + ", analysisMode=" + analysisMode + " → " + aiServerUrl;
+                        System.out.println(requestLog);
+                        slackNotifier.notify(requestLog);
                 } catch (Exception e) {
                         e.printStackTrace();
                         // AI 서버 호출 실패해도 업로드 자체는 성공으로 처리
@@ -173,6 +178,7 @@ public class VideoService {
                                 .title(saved.getTitle())
                                 .uploadDate(saved.getUploadDate().format(DateTimeFormatter.ISO_LOCAL_DATE))
                                 .status(saved.getVideoStatus())
+                                .analysisMode(saved.getAnalysisMode())
                                 .build();
         }
 
@@ -244,6 +250,7 @@ public class VideoService {
                                                                 ? s3Service.generatePresignedUrl(video.getThumbnailUrl())
                                                                 : null)
                                                 .durationSeconds(video.getDurationSeconds())
+                                                .analysisMode(video.getAnalysisMode())
                                                 .build())
                                 .matchSummary(matchSummary)
                                 .timelineEvents(eventDtos)

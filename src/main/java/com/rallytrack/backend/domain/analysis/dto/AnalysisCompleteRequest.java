@@ -24,6 +24,8 @@ public class AnalysisCompleteRequest {
     private List<HitData> hitsData;
     private String skeletonVideoUrl;
     private String minimapVideoUrl;
+    private String analysisMode;
+    private List<String> strokeClassSchemes;
 
     @JsonProperty("rallyResults")
     private List<RallyResultData> rallyResults;
