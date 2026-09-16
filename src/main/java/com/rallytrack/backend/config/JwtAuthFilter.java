@@ -75,12 +75,16 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
         if (authHeader != null && authHeader.startsWith("Bearer ")) {
             String token = authHeader.substring(7);
-            if (jwtUtil.isValid(token)) {
-                Long userId = jwtUtil.getUserId(token);
-                request.setAttribute("userId", userId);
-                filterChain.doFilter(request, response);
+            Long userId;
+            try {
+                userId = jwtUtil.parseAccessToken(token).get("user_id", Long.class);
+            } catch (io.jsonwebtoken.JwtException | IllegalArgumentException e) {
+                reject(response);
                 return;
             }
+            request.setAttribute("userId", userId);
+            filterChain.doFilter(request, response);
+            return;
         }
 
         // 인증 실패

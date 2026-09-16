@@ -55,12 +55,25 @@ public class JwtUtil {
     }
 
     public Long getUserId(String token) {
-        return parseToken(token).get("user_id", Long.class);
+        return parseAccessToken(token).get("user_id", Long.class);
     }
 
-    public boolean isValid(String token) {
+    public Claims parseAccessToken(String token) {
+        return parseTypedToken(token, "access");
+    }
+
+    private Claims parseTypedToken(String token, String expectedType) {
+        Claims claims = parseToken(token);
+        Long userId = claims.get("user_id", Long.class);
+        if (!expectedType.equals(claims.get("token_type", String.class)) || userId == null || userId <= 0 || claims.getExpiration() == null) {
+            throw new IllegalArgumentException("Invalid token purpose or principal");
+        }
+        return claims;
+    }
+
+    public boolean isValidRefreshToken(String token) {
         try {
-            parseToken(token);
+            parseTypedToken(token, "refresh");
             return true;
         } catch (Exception e) {
             return false;

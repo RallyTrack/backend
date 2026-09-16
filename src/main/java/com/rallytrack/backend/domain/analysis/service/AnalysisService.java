@@ -26,6 +26,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class AnalysisService {
 
+    private final com.rallytrack.backend.domain.video.service.VideoAccessService videoAccessService;
     private final AnalysisResultRepository analysisResultRepository;
     private final HitRepository hitRepository;
     private final VideoRepository videoRepository;
@@ -34,9 +35,17 @@ public class AnalysisService {
     // ── 분석 리포트 조회 ─────────────────────────────────────
 
     @Transactional(readOnly = true)
-    public AnalysisReportResponse getReport(Long videoId) {
+    public AnalysisReportResponse getReport(Long userId, Long videoId) {
+        Video video = videoAccessService.requireOwned(userId, videoId);
+        if ("FAILED".equals(video.getVideoStatus())) {
+            throw new com.rallytrack.backend.global.exception.ApiException(409, "ANALYSIS_FAILED", "영상 분석에 실패했습니다.");
+        }
+        if (!"COMPLETED".equals(video.getVideoStatus())) {
+            throw new com.rallytrack.backend.global.exception.ApiException(404, "ANALYSIS_NOT_READY", "영상 분석을 준비하고 있습니다.");
+        }
         AnalysisResult result = analysisResultRepository.findByVideoVideoId(videoId)
-                .orElseThrow(() -> new ResourceNotFroundException("해당 영상의 분석 결과가 없습니다."));
+                .orElseThrow(() -> new com.rallytrack.backend.global.exception.ApiException(
+                        409, "ANALYSIS_RESULT_UNAVAILABLE", "분석 결과를 불러올 수 없습니다."));
 
         // HitDto에 minimap_x/y 포함 → 프론트 히트맵이 미니맵과 동일한 좌표 사용
         List<AnalysisReportResponse.HitDto> hitDtos = result.getHits().stream()

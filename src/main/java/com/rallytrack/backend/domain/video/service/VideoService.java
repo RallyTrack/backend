@@ -36,6 +36,8 @@ import com.rallytrack.backend.domain.analysis.entity.Hit;
 public class VideoService {
 
         private final VideoRepository videoRepository;
+        private final VideoAccessService videoAccessService;
+        private final MediaValidationService mediaValidationService;
         private final TimelineEventRepository timelineEventRepository;
         private final AnalysisResultRepository analysisResultRepository;
         private final UserRepository userRepository;
@@ -58,25 +60,23 @@ public class VideoService {
                                 .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
                 String analysisMode = AnalysisMode.normalize(mode);
 
+                if (title == null || title.isBlank() || title.length() > 255)
+                        throw new IllegalArgumentException("영상 이름은 1~255자로 입력해주세요.");
+                if (durationSeconds != null && (durationSeconds <= 0 || durationSeconds > 86400))
+                        throw new IllegalArgumentException("영상 길이가 올바르지 않습니다.");
+                Map<String, Map<String, Integer>> corners = validateCorners(courtCorners);
                 String thumbnailS3Url = null;
-                try {
-                        thumbnailS3Url = s3Service.upLoadFile(thumbnailImage);
-                } catch (IOException e) {
-                        System.out.println("썸네일 업로드 실패: " + e.getMessage());
-                }
-
-                String s3Url;
-                try {
-                        s3Url = s3Service.upLoadFile(videoFile);
-                } catch (IOException e) {
-                        throw new RuntimeException("영상 파일 업로드에 실패했습니다.");
-                }
-
-                Map<String, Map<String, Integer>> corners;
-                try {
-                        corners = objectMapper.readValue(courtCorners, Map.class);
-                } catch (Exception e) {
-                        throw new RuntimeException("코트 코너 데이터 파싱 실패", e);
+                String s3Url = null;
+                // Validate both files before any object/DB write or AI request.
+                try (ValidatedMedia original = mediaValidationService.video(videoFile);
+                     ValidatedMedia thumbnail = mediaValidationService.thumbnail(thumbnailImage)) {
+                        s3Url = s3Service.uploadMedia(original);
+                        thumbnailS3Url = s3Service.uploadMedia(thumbnail);
+                } catch (IOException | RuntimeException e) {
+                        if (s3Url != null) { try { s3Service.deleteFile(s3Url); } catch (Exception ignored) {} }
+                        if (thumbnailS3Url != null) { try { s3Service.deleteFile(thumbnailS3Url); } catch (Exception ignored) {} }
+                        if (e instanceof com.rallytrack.backend.global.exception.ApiException a) throw a;
+                        throw new com.rallytrack.backend.global.exception.ApiException(503, "UPLOAD_UNAVAILABLE", "파일 업로드에 실패했습니다.");
                 }
 
                 Video video = Video.builder()
@@ -182,12 +182,32 @@ public class VideoService {
                                 .build();
         }
 
+        private Map<String, Map<String, Integer>> validateCorners(String raw) {
+                if (raw == null || raw.length() > 4096) throw new IllegalArgumentException("코트 좌표가 올바르지 않습니다.");
+                try {
+                        var root = objectMapper.readTree(raw);
+                        if (!root.isObject()) throw new IllegalArgumentException();
+                        Map<String, Map<String, Integer>> corners = new HashMap<>();
+                        for (String key : List.of("topLeft", "topRight", "bottomLeft", "bottomRight", "netTopLeft", "netTopRight")) {
+                                var point = root.get(key);
+                                if (point == null && key.startsWith("net")) continue;
+                                if (point == null || !point.isObject()) throw new IllegalArgumentException();
+                                var x = point.get("x"); var y = point.get("y");
+                                if (x == null || y == null || !x.isIntegralNumber() || !y.isIntegralNumber()
+                                        || !x.canConvertToInt() || !y.canConvertToInt()
+                                        || x.asInt() < 0 || y.asInt() < 0 || x.asInt() > 7680 || y.asInt() > 4320)
+                                        throw new IllegalArgumentException();
+                                corners.put(key, Map.of("x", x.asInt(), "y", y.asInt()));
+                        }
+                        return corners;
+                } catch (Exception e) { throw new IllegalArgumentException("코트 좌표가 올바르지 않습니다."); }
+        }
+
         // ── 영상 상세 조회 ───────────────────────────────────────
 
         @Transactional(readOnly = true)
-        public VideoDetailResponse getVideoDetail(Long videoId) {
-                Video video = videoRepository.findById(videoId)
-                                .orElseThrow(() -> new IllegalArgumentException("영상을 찾을 수 없습니다."));
+        public VideoDetailResponse getVideoDetail(Long userId, Long videoId) {
+                Video video = videoAccessService.requireOwned(userId, videoId);
 
                 List<TimelineEvent> events = timelineEventRepository
                                 .findByVideoVideoIdOrderByTimestampAsc(videoId);
