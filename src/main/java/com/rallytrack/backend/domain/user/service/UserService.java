@@ -125,15 +125,17 @@ public class UserService {
         }
 
         // 3. JWT 자체 검증
-        if (!jwtUtil.isValid(refreshTokenStr)) {
+        if (!jwtUtil.isValidRefreshToken(refreshTokenStr)) {
             refreshTokenRepository.delete(refreshToken);
             throw new IllegalArgumentException("리프레시 토큰이 유효하지 않습니다.");
         }
 
         User user = refreshToken.getUser();
 
-        // 4. 기존 리프레시 토큰 삭제
+        // Flush deletion before insertion: JWT timestamps have second precision, so a fast
+        // refresh can produce the same token and otherwise collide with the unique index.
         refreshTokenRepository.delete(refreshToken);
+        refreshTokenRepository.flush();
 
         // 5. 새 토큰 발급
         String newAccessToken = jwtUtil.generateAccessToken(user.getId(), user.getEmail());

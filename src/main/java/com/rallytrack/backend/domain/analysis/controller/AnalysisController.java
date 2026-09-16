@@ -29,8 +29,9 @@ public class AnalysisController {
     @Operation(summary = "분석 리포트 조회", description = "영상 분석 리포트를 조회합니다.")
     @GetMapping("/{videoId}")
     public ResponseEntity<ApiResponse<AnalysisReportResponse>> getReport(
+            @RequestAttribute("userId") Long userId,
             @PathVariable Long videoId) {
-        AnalysisReportResponse response = analysisService.getReport(videoId);
+        AnalysisReportResponse response = analysisService.getReport(userId, videoId);
         return ResponseEntity.ok(ApiResponse.success("분석 리포트 조회 성공", response));
     }
 
