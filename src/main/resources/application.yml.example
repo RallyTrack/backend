@@ -70,4 +70,5 @@ app:
 
 # Backend-only environment variables (read directly by dedicated clients):
 # GEMINI_API_KEY (secret), GEMINI_ENABLED=false, GEMINI_MODEL=gemini-3.6-flash
+# Briefings use thinkingLevel=low (Gemini 3) within a 1500-token total output budget.
 # MEDIA_FFPROBE=ffprobe. Missing/failed validation blocks uploads.
